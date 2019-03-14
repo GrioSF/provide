@@ -1,0 +1,9 @@
+[package]
+name = "rust"
+version = "0.1.0"
+authors = ["Adam Keating <1427265+akeating@users.noreply.github.com>"]
+edition = "2018"
+
+[dependencies]
+rusoto_core = "0.36.0"
+rusoto_ssm = "0.36.0"
