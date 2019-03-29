@@ -3,6 +3,7 @@ name = "provider"
 version = "0.1.0"
 authors = ["Adam Keating <1427265+akeating@users.noreply.github.com>"]
 edition = "2018"
+license = "MIT OR Apache-2.0"
 
 [dependencies]
 rusoto_core = "0.36.0"
