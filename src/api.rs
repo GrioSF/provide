@@ -54,7 +54,7 @@ pub fn to_hash_map(params: Box<Vec<Parameter>>) -> HashMap<String, String> {
     hash_map
 }
 
-// /moment/staging/DATABASE_URL => DATABASE_URL
+// /app/staging/key => key
 fn extract_name_from_path(param_path: String) -> String {
     let re = Regex::new(r"^.*/(.*)$").unwrap();
     re.captures(&param_path).take().unwrap().get(1).unwrap().as_str().to_owned()
@@ -68,7 +68,7 @@ fn extract_name_from_path(param_path: String) -> String {
     Intended to output to a file or to be evaled
 */
 pub fn as_env_format(map: HashMap<String, String>) -> String {
-    let lines: Vec<String> = map.into_iter().map(|(key, value)| format!("{}=\"{}\"\n", key, value)).collect();
+    let lines: Vec<String> = map.into_iter().map(|(key, value)| format!("{}=\"{}\"\n", key.to_uppercase(), value)).collect();
     lines.join("")
 }
 
