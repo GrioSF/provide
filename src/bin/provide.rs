@@ -1,4 +1,4 @@
-use provider::api::*;
+use provider::api;
 use clap::{AppSettings, App, Arg, SubCommand, ArgMatches};
 use std::env;
 use rusoto_core::{Region};
@@ -37,9 +37,9 @@ fn main() -> Result<(), Box<Error>> {
     match matches.subcommand() {
         ("get", Some(matches)) => {
             let (path, region) = process_get_matches(matches)?;
-            let parameters: Box<Vec<Parameter>> = get_parameters(path, region)?;
-            let map = to_hash_map(parameters);
-            print!("{}", as_env_format(map));
+            let parameters: Box<Vec<Parameter>> = api::get_parameters(path, region)?;
+            let map = api::to_hash_map(parameters);
+            print!("{}", api::as_env_format(map));
             Ok(())
         },
         _ => Ok(())
