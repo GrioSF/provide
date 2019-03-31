@@ -1,47 +1,53 @@
 use std::error::Error;
 use std::collections::HashMap;
-use rusoto_core::{HttpClient, Region};
-use rusoto_core::credential::{EnvironmentProvider, ProfileProvider, CredentialsError};
+use rusoto_core::{Region};
 use rusoto_ssm::*;
 use regex::Regex;
-use std::path::{PathBuf};
-use dirs::home_dir;
+use std::env;
+use crate::types::{GetConfig};
 
-pub fn get_parameters(path: &str, recursive: bool, profile: Option<&str>) -> Result<Box<Vec<Parameter>>, Box<Error>> {
-    fn get_parameters_with_acc(path: &str, recursive: bool, profile: Option<&str>, next_token: Option<String>, mut acc: Box<Vec<Parameter>>) -> Result<Box<Vec<Parameter>>, Box<Error>> {
-        let region = Region::UsWest1;
-        let request_dispatcher = HttpClient::new().unwrap();
-        let ssm_client = match profile {
-            Some(name) => {
-                let file_path = default_credentials_file_path()?;
-                let credentials_provider = ProfileProvider::with_configuration(file_path, name);
-                SsmClient::new_with(request_dispatcher, credentials_provider, region)
-            },
-            None => {
-                let credentials_provider = EnvironmentProvider::default();
-                SsmClient::new_with(request_dispatcher, credentials_provider, region)
-            }
-        };
-        let request = GetParametersByPathRequest{
-            path: String::from(path),
-            next_token: next_token,
-            recursive: Some(recursive),
-            with_decryption: Some(false),
-            parameter_filters: None,
-            max_results: None,
-        };
-        match ssm_client.get_parameters_by_path(request).sync() {
-            Ok(output) => {
-                acc.append(&mut output.parameters.unwrap());
-                match output.next_token {
-                    Some(token) => get_parameters_with_acc(path, recursive, profile, Some(token), acc),
-                    None => Ok(acc)
-                }
-            },
-            Err(err) => Err(Box::new(err)),
-        }
+pub fn get_parameters(path: String, recursive: bool, profile: Option<&str>) -> Result<Box<Vec<Parameter>>, Box<Error>> {
+    if profile.is_some() {
+        // The only way I've found to have rusoto honor given profile since ProfileProvider
+        // ignores it. Note this is only set for the current process.
+        env::set_var("AWS_PROFILE", profile.unwrap());
     }
-    get_parameters_with_acc(path, recursive, profile, None, Box::new(Vec::<Parameter>::new()))
+    let region = Region::default(); // will return a region defined in the env, profile, or default see method doc
+    get_parameters_with_acc(GetConfig {
+        path: path, 
+        recursive: recursive, 
+        region: region, 
+        next_token: None, 
+        acc: Box::new(Vec::<Parameter>::new())
+    })
+}
+
+fn get_parameters_with_acc(mut get_config: GetConfig) -> Result<Box<Vec<Parameter>>, Box<Error>> {
+    let request = GetParametersByPathRequest{
+        path: get_config.path.clone(),
+        next_token: get_config.next_token,
+        recursive: Some(get_config.recursive),
+        with_decryption: Some(false),
+        parameter_filters: None,
+        max_results: None,
+    };
+    let ssm_client = SsmClient::new(get_config.region.clone());
+    match ssm_client.get_parameters_by_path(request).sync() {
+        Ok(output) => {
+            get_config.acc.append(&mut output.parameters.unwrap());
+            match output.next_token {
+                Some(token) => get_parameters_with_acc(GetConfig {
+                    path: get_config.path, 
+                    recursive: get_config.recursive, 
+                    region: get_config.region, 
+                    next_token: Some(token), 
+                    acc: get_config.acc
+                }),
+                None => Ok(get_config.acc)
+            }
+        },
+        Err(err) => Err(Box::new(err)),
+    }
 }
 
 pub fn to_hash_map(params: Box<Vec<Parameter>>) -> HashMap<String, String> {
@@ -70,15 +76,4 @@ fn extract_name_from_path(param_path: String) -> String {
 pub fn as_env_format(map: HashMap<String, String>) -> String {
     let lines: Vec<String> = map.into_iter().map(|(key, value)| format!("{}=\"{}\"\n", key.to_uppercase(), value)).collect();
     lines.join("")
-}
-
-fn default_credentials_file_path() -> Result<PathBuf, Box<Error>> {
-    match home_dir() {
-        Some(mut home_path) => {
-            home_path.push(".aws");
-            home_path.push("credentials");
-            Ok(home_path)
-        },
-        None => Err(Box::new(CredentialsError::new("Failed to determine home directory.")))
-    }
 }

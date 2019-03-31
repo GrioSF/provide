@@ -14,7 +14,7 @@ fn main() {
             .long("profile")
             .takes_value(true)
             .value_name("NAME")
-            .help("Use credentials from a local profile"))
+            .help("Use credentials and region from a local profile"))
         .arg(Arg::with_name("recursive")
             .short("r")
             .long("recursive")
@@ -25,10 +25,10 @@ fn main() {
     let path = matches.value_of("path").unwrap();
     let recursive = matches.is_present("recursive");
     let profile = matches.value_of("profile");
-    run(path, recursive, profile);
+    run(String::from(path), recursive, profile);
 }
 
-fn run(path: &str, recursive: bool, profile: Option<&str>) {
+fn run(path: String, recursive: bool, profile: Option<&str>) {
     match get_parameters(path, recursive, profile) {
         Ok(parameters) => {
             let map = to_hash_map(parameters);

@@ -6,8 +6,8 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-rusoto_core = "0.36.0"
-rusoto_ssm = "0.36.0"
+rusoto_core = "0.37.0"
+rusoto_ssm = "0.37.0"
 regex = "1"
 clap = "~2.27.0"
 dirs = "1.0.5"
