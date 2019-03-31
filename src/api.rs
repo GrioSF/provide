@@ -80,7 +80,6 @@ mod tests {
     fn test_extract_name_from_path() {
         assert_eq!(extract_name_from_path("/app/env/DATABASE_URL").unwrap(), "DATABASE_URL");
         assert_eq!(extract_name_from_path("/app/env/foo").unwrap(), "foo");
-        println!("{}", extract_name_from_path("/app/foo").unwrap_err());
         assert_eq!(extract_name_from_path("/app/foo").unwrap_err(), ProvideError::InvalidPathError(String::from("Invalid path /app/foo")));
     }
 
