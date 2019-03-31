@@ -3,19 +3,11 @@ use std::collections::HashMap;
 use rusoto_core::{Region};
 use rusoto_ssm::*;
 use regex::Regex;
-use std::env;
 use crate::types::{GetConfig};
 
-pub fn get_parameters(path: String, recursive: bool, profile: Option<&str>) -> Result<Box<Vec<Parameter>>, Box<Error>> {
-    if profile.is_some() {
-        // The only way I've found to have rusoto honor given profile since ProfileProvider
-        // ignores it. Note this is only set for the current process.
-        env::set_var("AWS_PROFILE", profile.unwrap());
-    }
-    let region = Region::default(); // will return a region defined in the env, profile, or default see method doc
+pub fn get_parameters(path: String, region: Region) -> Result<Box<Vec<Parameter>>, Box<Error>> {
     get_parameters_with_acc(GetConfig {
         path: path, 
-        recursive: recursive, 
         region: region, 
         next_token: None, 
         acc: Box::new(Vec::<Parameter>::new())
@@ -26,7 +18,7 @@ fn get_parameters_with_acc(mut get_config: GetConfig) -> Result<Box<Vec<Paramete
     let request = GetParametersByPathRequest{
         path: get_config.path.clone(),
         next_token: get_config.next_token,
-        recursive: Some(get_config.recursive),
+        recursive: Some(false),
         with_decryption: Some(false),
         parameter_filters: None,
         max_results: None,
@@ -38,7 +30,6 @@ fn get_parameters_with_acc(mut get_config: GetConfig) -> Result<Box<Vec<Paramete
             match output.next_token {
                 Some(token) => get_parameters_with_acc(GetConfig {
                     path: get_config.path, 
-                    recursive: get_config.recursive, 
                     region: get_config.region, 
                     next_token: Some(token), 
                     acc: get_config.acc
