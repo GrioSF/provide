@@ -1,12 +1,12 @@
 use provider::api;
+use provider::error::{ProvideError};
 use clap::{AppSettings, App, Arg, SubCommand, ArgMatches};
 use std::env;
 use rusoto_core::{Region};
 use rusoto_ssm::{Parameter};
 use std::str::FromStr;
-use std::error::Error;
 
-fn main() -> Result<(), Box<Error>> {
+fn main() -> Result<(), ProvideError> {
     let matches = App::new("provide")
         .setting(AppSettings::SubcommandRequiredElseHelp)
         .about("Provides environment variables from AWS Parameter Store")
@@ -38,7 +38,7 @@ fn main() -> Result<(), Box<Error>> {
         ("get", Some(matches)) => {
             let (path, region) = process_get_matches(matches)?;
             let parameters: Box<Vec<Parameter>> = api::get_parameters(path, region)?;
-            let map = api::to_hash_map(parameters);
+            let map = api::to_hash_map(parameters)?;
             print!("{}", api::as_env_format(map));
             Ok(())
         },
@@ -46,7 +46,7 @@ fn main() -> Result<(), Box<Error>> {
     }
 }
 
-fn process_get_matches(matches: &ArgMatches) -> Result<(String, Region), Box<Error>> {
+fn process_get_matches(matches: &ArgMatches) -> Result<(String, Region), ProvideError> {
     let path = matches.value_of("path").unwrap();
     let region_name = matches.value_of("region");
     let profile = matches.value_of("profile");
