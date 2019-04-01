@@ -1,3 +1,5 @@
+Copyright Adam Keating, Grio, and contributors.
+
 ## License
 
 Licensed under either of
