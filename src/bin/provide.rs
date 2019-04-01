@@ -1,4 +1,5 @@
 use provider::api;
+use provider::types::*;
 use provider::error::{ProvideError};
 use clap::{AppSettings, App, Arg, SubCommand, ArgMatches};
 use std::env;
@@ -37,7 +38,8 @@ fn main() -> Result<(), ProvideError> {
     match matches.subcommand() {
         ("get", Some(matches)) => {
             let (path, region) = process_get_matches(matches)?;
-            let parameters: Box<Vec<Parameter>> = api::get_parameters(path, region)?;
+            let options = Options{ path: path, region: region };
+            let parameters: Box<Vec<Parameter>> = api::get_parameters(options)?;
             let map = api::to_hash_map(parameters)?;
             print!("{}", api::as_env_format(map));
             Ok(())

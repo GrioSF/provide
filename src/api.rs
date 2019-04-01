@@ -1,14 +1,13 @@
 use std::collections::HashMap;
-use rusoto_core::{Region};
 use rusoto_ssm::*;
 use std::path::MAIN_SEPARATOR;
-use crate::types::{GetConfig};
+use crate::types::*;
 use crate::error::ProvideError;
 
-pub fn get_parameters(path: String, region: Region) -> Result<Box<Vec<Parameter>>, ProvideError> {
+pub fn get_parameters(options: Options) -> Result<Box<Vec<Parameter>>, ProvideError> {
     get_parameters_with_acc(GetConfig {
-        path: path, 
-        region: region, 
+        path: options.path, 
+        region: options.region, 
         next_token: None, 
         acc: Box::new(Vec::<Parameter>::new())
     })
