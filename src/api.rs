@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use rusoto_core::{Region};
 use rusoto_ssm::*;
-use regex::Regex;
+use std::path::MAIN_SEPARATOR;
 use crate::types::{GetConfig};
 use crate::error::ProvideError;
 
@@ -44,7 +44,7 @@ fn get_parameters_with_acc(mut get_config: GetConfig) -> Result<Box<Vec<Paramete
 pub fn to_hash_map(params: Box<Vec<Parameter>>) -> Result<HashMap<String, String>, ProvideError> {
     let mut hash_map: HashMap<String, String> = HashMap::new();
     for param in params.into_iter() {
-        let key = extract_name_from_path(&param.name.unwrap())?;
+        let key = extract_key_from_path(&param.name.unwrap())?;
         let value = param.value.unwrap();
         hash_map.insert(key, value);
     }
@@ -52,11 +52,12 @@ pub fn to_hash_map(params: Box<Vec<Parameter>>) -> Result<HashMap<String, String
 }
 
 // /app/staging/key => key
-fn extract_name_from_path(param_path: &str) -> Result<String, ProvideError> {
-    let re = Regex::new(r"^/(.*)/(.*)/(.*)$").unwrap();
-    match re.captures(param_path) {
-        Some(captures) => Ok(captures.get(3).unwrap().as_str().to_owned()),
-        None => Err(ProvideError::InvalidPathError(format!("Invalid path {}", param_path)))
+fn extract_key_from_path(param_path: &str) -> Result<String, ProvideError> {
+    let candidate = param_path.trim_start_matches(MAIN_SEPARATOR);
+    let mut segments: Vec<String> = candidate.split(MAIN_SEPARATOR).map(|x| x.to_string()).collect();
+    match segments.len() {
+        3 => Ok(segments.pop().unwrap()),
+        _ => Err(ProvideError::InvalidPathError(format!("Invalid path {}", param_path)))
     }
 }
 
@@ -78,9 +79,28 @@ mod tests {
  
     #[test]
     fn test_extract_name_from_path() {
-        assert_eq!(extract_name_from_path("/app/env/DATABASE_URL").unwrap(), "DATABASE_URL");
-        assert_eq!(extract_name_from_path("/app/env/foo").unwrap(), "foo");
-        assert_eq!(extract_name_from_path("/app/foo").unwrap_err(), ProvideError::InvalidPathError(String::from("Invalid path /app/foo")));
+        assert_eq!(extract_key_from_path("/app/env/DATABASE_URL").unwrap(), "DATABASE_URL");
+        assert_eq!(extract_key_from_path("/app/env/foo").unwrap(), "foo");
+        assert_eq!(
+            extract_key_from_path("/app/foo").unwrap_err(), 
+            ProvideError::InvalidPathError(String::from("Invalid path /app/foo"))
+        );
+        assert_eq!(
+            extract_key_from_path("/app/foo/bar/car").unwrap_err(), 
+            ProvideError::InvalidPathError(String::from("Invalid path /app/foo/bar/car"))
+        );
     }
 
+    #[test]
+    fn test_as_env_format() {
+        let map: HashMap<String, String> = vec![
+            ("/app/env/one", "bar"),
+            ("/app/env/two", "baz"),
+            ("/app/env/THREE", "clock"),
+        ].into_iter().map(|(k, v)| (extract_key_from_path(k).unwrap(), String::from(v))).collect();
+        let env_format = as_env_format(map);
+        let mut result: Vec<&str> = env_format.trim().split("\n").collect();
+        result.sort();
+        assert_eq!(result, vec!["ONE=\"bar\"", "THREE=\"clock\"", "TWO=\"baz\""]);
+    }
 }
