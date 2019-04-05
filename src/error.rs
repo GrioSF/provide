@@ -3,12 +3,15 @@ use rusoto_core::region::ParseRegionError;
 use rusoto_ssm::{GetParametersByPathError};
 use std::error::Error;
 use std::fmt;
+use std::io;
 
 #[derive(Debug, PartialEq)]
 pub enum ProvideError {
+    BadFormat(String),
     InvalidPathError(String),
     GetParametersByPathError(GetParametersByPathError),
     ParseRegionError(ParseRegionError),
+    IOError(io::ErrorKind)
 }
 
 impl Error for ProvideError {}
@@ -16,9 +19,11 @@ impl Error for ProvideError {}
 impl fmt::Display for ProvideError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let message = match self {
+            ProvideError::BadFormat(message) => format!("BadFormat: {}", message),
             ProvideError::GetParametersByPathError(err) => format!("GetParametersByPathError: {}", err),
             ProvideError::InvalidPathError(message) => format!("InvalidPathError: {}", message),
             ProvideError::ParseRegionError(err) => format!("ParseRegionError: {}", err),
+            ProvideError::IOError(kind) => format!("IOError: {:?}", kind),
         };
         write!(f , "{}", message)
     }
@@ -36,3 +41,8 @@ impl From<ParseRegionError> for ProvideError {
     }
 }
 
+impl From<io::Error> for ProvideError {
+    fn from(err: io::Error) -> Self {
+        ProvideError::IOError(err.kind())
+    }
+}

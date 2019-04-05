@@ -4,8 +4,8 @@ use provider::error::{ProvideError};
 use clap::{AppSettings, App, Arg, SubCommand, ArgMatches};
 use std::env;
 use rusoto_core::{Region};
-use rusoto_ssm::{Parameter};
 use std::str::FromStr;
+use std::path::PathBuf;
 
 fn main() -> Result<(), ProvideError> {
     let matches = App::new("provide")
@@ -32,25 +32,40 @@ fn main() -> Result<(), ProvideError> {
                     .takes_value(true)
                     .value_name("REGION")
                     .help("Specify region (overrides env, profile)"))
+                .arg(Arg::with_name("include")
+                    .required(false)
+                    .short("i")
+                    .long("include")
+                    .takes_value(true)
+                    .value_name("FILE")
+                    .help("Include these env variables from a file"))
+                .arg(Arg::with_name("format")
+                    .required(false)
+                    .short("f")
+                    .long("format")
+                    .takes_value(true)
+                    .value_name("FORMAT")
+                    .help("Format output, default 'env'"))
         )
         .get_matches();
 
     match matches.subcommand() {
         ("get", Some(matches)) => {
-            let (path, region) = process_get_matches(matches)?;
-            let options = Options{ path: path, region: region };
-            let parameters: Box<Vec<Parameter>> = api::get_parameters(options)?;
-            let map = api::to_hash_map(parameters)?;
-            print!("{}", api::as_env_format(map));
-            Ok(())
+            let options = options_from_matches(matches)?;
+            let pairs: Vec<Pair> = api::get_parameters(&options)?;
+            Ok(display(pairs, options.format))
         },
         _ => Ok(())
     }
 }
 
-fn process_get_matches(matches: &ArgMatches) -> Result<(String, Region), ProvideError> {
-    let path = matches.value_of("path").unwrap();
+fn options_from_matches(matches: &ArgMatches) -> Result<Options, ProvideError> {
+    let path = matches.value_of("path").unwrap().to_owned();
     let region_name = matches.value_of("region");
+    let include = match matches.value_of("include") {
+        Some(file_name) => Some(PathBuf::from(file_name)),
+        None => None
+    };
     let profile = matches.value_of("profile");
     if profile.is_some() {
         // The only way I've found to have rusoto honor given profile since ProfileProvider
@@ -61,5 +76,20 @@ fn process_get_matches(matches: &ArgMatches) -> Result<(String, Region), Provide
         Some(name) => Region::from_str(name)?,
         None => Region::default() // will return a region defined in the env, profile, or default see method doc
     };
-    Ok((String::from(path), region))
+    let format = match matches.value_of("format") {
+        Some("export") => Ok(Format::EXPORT),
+        Some("json") => Ok(Format::JSON),
+        Some("env") | None => Ok(Format::ENV),
+        Some(format_name) => Err(ProvideError::BadFormat(format!("Unknown format {}", format_name)))
+    }?;
+    Ok(Options{ path: path, region: region, include: include, format: format })
+}
+
+fn display(pairs: Vec<Pair>, format: Format) {
+    let formatted = match format {
+        Format::ENV => api::as_env_format(pairs),
+        Format::EXPORT => api::as_export_format(pairs),
+        Format::JSON => unimplemented!()
+    };
+    print!("{}", formatted);
 }

@@ -3,14 +3,25 @@ use rusoto_ssm::*;
 use std::path::MAIN_SEPARATOR;
 use crate::types::*;
 use crate::error::ProvideError;
+use std::path::PathBuf;
+use std::io::{BufRead, BufReader};
+use std::fs::File;
 
-pub fn get_parameters(options: Options) -> Result<Box<Vec<Parameter>>, ProvideError> {
-    get_parameters_with_acc(GetConfig {
-        path: options.path, 
-        region: options.region, 
+pub fn get_parameters(options: &Options) -> Result<Vec<Pair>, ProvideError> {
+    let aws_parameters = get_parameters_with_acc(GetConfig {
+        path: options.path.to_owned(), 
+        region: options.region.to_owned(), 
         next_token: None, 
         acc: Box::new(Vec::<Parameter>::new())
-    })
+    })?;
+    let mut pairs = as_pairs(aws_parameters)?;
+    if let Some(mut file_pairs) = match &options.include {
+        Some(path_buf) => Some(read_pairs_from_file(path_buf)?),
+        None => None
+    } {
+        pairs.append(file_pairs.as_mut());
+    };
+    Ok(pairs)
 }
 
 fn get_parameters_with_acc(mut get_config: GetConfig) -> Result<Box<Vec<Parameter>>, ProvideError> {
@@ -40,14 +51,49 @@ fn get_parameters_with_acc(mut get_config: GetConfig) -> Result<Box<Vec<Paramete
     }
 }
 
-pub fn to_hash_map(params: Box<Vec<Parameter>>) -> Result<HashMap<String, String>, ProvideError> {
-    let mut hash_map: HashMap<String, String> = HashMap::new();
-    for param in params.into_iter() {
-        let key = extract_key_from_path(&param.name.unwrap())?;
-        let value = param.value.unwrap();
-        hash_map.insert(key, value);
+pub fn read_pairs_from_file(path: &PathBuf) -> Result<Vec<Pair>, ProvideError> {
+    let reader = with_file(path.to_path_buf())?;
+    let lines_iter = reader.lines().map(|line| {
+        match line {
+            Ok(text) => parse_line(text),
+            Err(err) => Err(From::from(err))
+        }
+    });
+    let lines: Result<Vec<Option<Pair>>, ProvideError> = lines_iter.collect();
+    match lines {
+        Ok(list) => Ok(list.into_iter().filter(|pair| pair.is_some()).map(|p| p.unwrap()).collect()),
+        Err(err) => Err(err)
     }
-    Ok(hash_map)
+}
+
+fn parse_line(line: String) -> Result<Option<Pair>, ProvideError> {
+    if line.is_empty() {
+        return Ok(None);
+    }
+    let (key, val) = match line.find("=") {
+        Some(0) => Err(ProvideError::BadFormat(String::from("Invalid key has no length"))),
+        Some(index) => {
+            let key = &line[0..index];
+            let val = &line[index+1..];
+            Ok((key, val))
+        },
+        None => Err(ProvideError::BadFormat(String::from("Invalid key=value pair")))
+    }?;
+    Ok(Some(Pair::new(key, val)))
+}
+
+fn with_file(path: PathBuf) -> Result<Box<BufRead>, ProvideError> {
+    let f: File = File::open(path)?;
+    let reader: Box<BufRead> = Box::new(BufReader::new(f));
+    Ok(reader)
+}
+
+pub fn as_pairs(params: Box<Vec<Parameter>>) -> Result<Vec<Pair>, ProvideError> {
+    params.into_iter().map(|param| {
+        let key = extract_key_from_path(&param.name.unwrap())?;
+        let val = param.value.unwrap();
+        Ok(Pair::new(&key, &val))
+    }).collect()
 }
 
 // /app/staging/key => key
@@ -60,6 +106,10 @@ fn extract_key_from_path(param_path: &str) -> Result<String, ProvideError> {
     }
 }
 
+pub fn as_hash_map(pairs: Vec<Pair>) -> Result<HashMap<String, String>, ProvideError> {
+    Ok(pairs.into_iter().map(|pair| (pair.key, pair.val)).collect())
+}
+
 /*
     Outputs String with the following format:
     WHAT="EVERS"\n
@@ -67,8 +117,29 @@ fn extract_key_from_path(param_path: &str) -> Result<String, ProvideError> {
 
     Intended to output to a file or to be evaled
 */
-pub fn as_env_format(map: HashMap<String, String>) -> String {
-    let lines: Vec<String> = map.into_iter().map(|(key, value)| format!("{}=\"{}\"\n", key.to_uppercase(), value)).collect();
+pub fn as_env_format(pairs: Vec<Pair>) -> String {
+    let lines: Vec<String> = pairs.into_iter()
+        .map(|pair| {
+            if pair.val.starts_with("=") && pair.val.ends_with("=") {
+                format!("{}={}\n", pair.key.to_uppercase(), pair.val)    
+            } else {
+                format!("{}=\"{}\"\n", pair.key.to_uppercase(), pair.val)
+            }
+        })
+        .collect();
+    lines.join("")
+}
+
+pub fn as_export_format(pairs: Vec<Pair>) -> String {
+    let lines: Vec<String> = pairs.into_iter()
+        .map(|pair| {
+            if pair.val.starts_with("=") && pair.val.ends_with("=") {
+                format!("export {}={}\n", pair.key.to_uppercase(), pair.val)    
+            } else {
+                format!("export {}=\"{}\"\n", pair.key.to_uppercase(), pair.val)
+            }
+        })
+        .collect();
     lines.join("")
 }
 
@@ -77,7 +148,7 @@ mod tests {
     use super::*;
  
     #[test]
-    fn test_extract_name_from_path() {
+    fn test_extract_key_from_path() {
         assert_eq!(extract_key_from_path("/app/env/DATABASE_URL").unwrap(), "DATABASE_URL");
         assert_eq!(extract_key_from_path("/app/env/foo").unwrap(), "foo");
         assert_eq!(
@@ -92,12 +163,12 @@ mod tests {
 
     #[test]
     fn test_as_env_format() {
-        let map: HashMap<String, String> = vec![
-            ("/app/env/one", "bar"),
-            ("/app/env/two", "baz"),
-            ("/app/env/THREE", "clock"),
-        ].into_iter().map(|(k, v)| (extract_key_from_path(k).unwrap(), String::from(v))).collect();
-        let env_format = as_env_format(map);
+        let pairs = vec![
+            Pair::new("one", "bar"),
+            Pair::new("two", "baz"),
+            Pair::new("THREE", "clock"),
+        ];
+        let env_format = as_env_format(pairs);
         let mut result: Vec<&str> = env_format.trim().split("\n").collect();
         result.sort();
         assert_eq!(result, vec!["ONE=\"bar\"", "THREE=\"clock\"", "TWO=\"baz\""]);
