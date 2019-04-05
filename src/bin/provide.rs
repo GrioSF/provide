@@ -1,11 +1,11 @@
+use std::env;
+use std::str::FromStr;
+use std::path::PathBuf;
+use clap::{AppSettings, App, Arg, SubCommand, ArgMatches};
+use rusoto_core::{Region};
 use provider::api;
 use provider::types::*;
 use provider::error::{ProvideError};
-use clap::{AppSettings, App, Arg, SubCommand, ArgMatches};
-use std::env;
-use rusoto_core::{Region};
-use std::str::FromStr;
-use std::path::PathBuf;
 
 fn main() -> Result<(), ProvideError> {
     let matches = App::new("provide")

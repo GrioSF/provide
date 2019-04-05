@@ -1,12 +1,14 @@
 use std::convert::From;
-use rusoto_core::region::ParseRegionError;
-use rusoto_ssm::{GetParametersByPathError};
 use std::error::Error;
 use std::fmt;
 use std::io;
+use regex;
+use rusoto_core::region::ParseRegionError;
+use rusoto_ssm::{GetParametersByPathError};
 
 #[derive(Debug, PartialEq)]
 pub enum ProvideError {
+    BadRegex(regex::Error),
     BadFormat(String),
     InvalidPathError(String),
     GetParametersByPathError(GetParametersByPathError),
@@ -19,6 +21,7 @@ impl Error for ProvideError {}
 impl fmt::Display for ProvideError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let message = match self {
+            ProvideError::BadRegex(err) => format!("BadRegex: {:?}", err),
             ProvideError::BadFormat(message) => format!("BadFormat: {}", message),
             ProvideError::GetParametersByPathError(err) => format!("GetParametersByPathError: {}", err),
             ProvideError::InvalidPathError(message) => format!("InvalidPathError: {}", message),

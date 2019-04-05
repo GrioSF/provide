@@ -1,6 +1,6 @@
+use std::path::PathBuf;
 use rusoto_core::{Region};
 use rusoto_ssm::{Parameter};
-use std::path::PathBuf;
 
 pub struct Options {
     pub include: Option<PathBuf>,

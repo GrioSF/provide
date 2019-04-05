@@ -1,11 +1,12 @@
 use std::collections::HashMap;
-use rusoto_ssm::*;
 use std::path::MAIN_SEPARATOR;
-use crate::types::*;
-use crate::error::ProvideError;
 use std::path::PathBuf;
 use std::io::{BufRead, BufReader};
 use std::fs::File;
+use rusoto_ssm::*;
+use regex::{Regex};
+use crate::types::*;
+use crate::error::ProvideError;
 
 pub fn get_parameters(options: &Options) -> Result<Vec<Pair>, ProvideError> {
     let aws_parameters = get_parameters_with_acc(GetConfig {
@@ -119,28 +120,24 @@ pub fn as_hash_map(pairs: Vec<Pair>) -> Result<HashMap<String, String>, ProvideE
 */
 pub fn as_env_format(pairs: Vec<Pair>) -> String {
     let lines: Vec<String> = pairs.into_iter()
-        .map(|pair| {
-            if pair.val.starts_with("=") && pair.val.ends_with("=") {
-                format!("{}={}\n", pair.key.to_uppercase(), pair.val)    
-            } else {
-                format!("{}=\"{}\"\n", pair.key.to_uppercase(), pair.val)
-            }
-        })
+        .map(|pair| format!("{}={}\n", pair.key.to_uppercase(), pair.val))
         .collect();
     lines.join("")
 }
 
 pub fn as_export_format(pairs: Vec<Pair>) -> String {
     let lines: Vec<String> = pairs.into_iter()
-        .map(|pair| {
-            if pair.val.starts_with("=") && pair.val.ends_with("=") {
-                format!("export {}={}\n", pair.key.to_uppercase(), pair.val)    
-            } else {
-                format!("export {}=\"{}\"\n", pair.key.to_uppercase(), pair.val)
-            }
-        })
+        .map(|pair| format!("export {}=\"{}\"\n", pair.key.to_uppercase(), escape_for_bash(&pair.val)))
         .collect();
     lines.join("")
+}
+
+// Escape $`"!)\ for use in bash
+pub fn escape_for_bash(val: &str) -> String {
+    lazy_static! {
+        static ref RE: Regex = Regex::new(r#"([$`"!\)\\])"#).unwrap();
+    }
+    RE.replace_all(val, "\\$1").into_owned()
 }
 
 #[cfg(test)]
@@ -171,6 +168,11 @@ mod tests {
         let env_format = as_env_format(pairs);
         let mut result: Vec<&str> = env_format.trim().split("\n").collect();
         result.sort();
-        assert_eq!(result, vec!["ONE=\"bar\"", "THREE=\"clock\"", "TWO=\"baz\""]);
+        assert_eq!(result, vec!["ONE=bar", "THREE=clock", "TWO=baz"]);
+    }
+
+    #[test]
+    fn test_escape_for_bash() {
+        assert_eq!(escape_for_bash(r#"a$`"\'!)&"#), r#"a\$\`\"\\'\!\)&"#);
     }
 }
