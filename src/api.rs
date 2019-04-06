@@ -132,11 +132,12 @@ pub fn as_export_format(pairs: Vec<Pair>) -> String {
     lines.join("")
 }
 
+lazy_static! {
+    static ref RE: Regex = Regex::new(r#"([$`"!\)\\])"#).unwrap();
+}
+
 // Escape $`"!)\ for use in bash
 pub fn escape_for_bash(val: &str) -> String {
-    lazy_static! {
-        static ref RE: Regex = Regex::new(r#"([$`"!\)\\])"#).unwrap();
-    }
     RE.replace_all(val, "\\$1").into_owned()
 }
 
