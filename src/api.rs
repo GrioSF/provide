@@ -1,28 +1,43 @@
 use std::collections::HashMap;
 use std::path::MAIN_SEPARATOR;
 use std::path::PathBuf;
-use std::io::{BufRead, BufReader};
+use std::io::{Cursor, BufRead, BufReader};
 use std::fs::File;
+use std::process::{Command, Stdio, Child};
 use rusoto_ssm::*;
 use regex::{Regex};
+use base64;
 use crate::types::*;
 use crate::error::ProvideError;
 
-pub fn get_parameters(options: &Options) -> Result<Vec<Pair>, ProvideError> {
-    let aws_parameters = get_parameters_with_acc(GetConfig {
-        path: options.path.to_owned(), 
-        region: options.region.to_owned(), 
-        next_token: None, 
-        acc: Box::new(Vec::<Parameter>::new())
-    })?;
-    let mut pairs = as_pairs(aws_parameters)?;
-    if let Some(mut file_pairs) = match &options.include {
+pub fn get_parameters(options: &Options) -> Result<HashMap<String, String>, ProvideError> {
+    let mut map = HashMap::<String,String>::new();
+    match options.mode {
+        Some(Mode::GET) => {
+            let aws_parameters = get_parameters_with_acc(GetConfig {
+                path: options.path.to_owned(), 
+                region: options.region.to_owned(), 
+                next_token: None, 
+                acc: Box::new(Vec::<Parameter>::new())
+            })?;
+            let params_map = params_as_hash_map(aws_parameters)?;
+            map.extend(params_map);
+        },
+        _ => ()
+    }
+    if let Some(include_map) = match &options.include {
         Some(path_buf) => Some(read_pairs_from_file(path_buf)?),
         None => None
     } {
-        pairs.append(file_pairs.as_mut());
+        map.extend(include_map);
     };
-    Ok(pairs)
+    if let Some(merge_map) = match &options.merge {
+        Some(path_buf) => Some(merge_with_command(path_buf)?),
+        None => None
+    } {
+        map.extend(merge_map);
+    };
+    Ok(map)
 }
 
 fn get_parameters_with_acc(mut get_config: GetConfig) -> Result<Box<Vec<Parameter>>, ProvideError> {
@@ -52,8 +67,12 @@ fn get_parameters_with_acc(mut get_config: GetConfig) -> Result<Box<Vec<Paramete
     }
 }
 
-pub fn read_pairs_from_file(path: &PathBuf) -> Result<Vec<Pair>, ProvideError> {
+pub fn read_pairs_from_file(path: &PathBuf) -> Result<HashMap<String, String>, ProvideError> {
     let reader = with_file(path.to_path_buf())?;
+    read_from_reader(reader)
+}
+
+pub fn read_from_reader(reader: Box<BufRead>) -> Result<HashMap<String, String>, ProvideError> {
     let lines_iter = reader.lines().map(|line| {
         match line {
             Ok(text) => parse_line(text),
@@ -80,7 +99,7 @@ fn parse_line(line: String) -> Result<Option<Pair>, ProvideError> {
         },
         None => Err(ProvideError::BadFormat(String::from("Invalid key=value pair")))
     }?;
-    Ok(Some(Pair::new(key, val)))
+    Ok(Some((key.to_owned(), val.to_owned())))
 }
 
 fn with_file(path: PathBuf) -> Result<Box<BufRead>, ProvideError> {
@@ -89,11 +108,11 @@ fn with_file(path: PathBuf) -> Result<Box<BufRead>, ProvideError> {
     Ok(reader)
 }
 
-pub fn as_pairs(params: Box<Vec<Parameter>>) -> Result<Vec<Pair>, ProvideError> {
+pub fn params_as_hash_map(params: Box<Vec<Parameter>>) -> Result<HashMap<String, String>, ProvideError> {
     params.into_iter().map(|param| {
         let key = extract_key_from_path(&param.name.unwrap())?;
         let val = param.value.unwrap();
-        Ok(Pair::new(&key, &val))
+        Ok((key.to_owned(), val.to_owned()))
     }).collect()
 }
 
@@ -107,10 +126,6 @@ fn extract_key_from_path(param_path: &str) -> Result<String, ProvideError> {
     }
 }
 
-pub fn as_hash_map(pairs: Vec<Pair>) -> Result<HashMap<String, String>, ProvideError> {
-    Ok(pairs.into_iter().map(|pair| (pair.key, pair.val)).collect())
-}
-
 /*
     Outputs String with the following format:
     WHAT="EVERS"\n
@@ -118,16 +133,20 @@ pub fn as_hash_map(pairs: Vec<Pair>) -> Result<HashMap<String, String>, ProvideE
 
     Intended to output to a file or to be evaled
 */
-pub fn as_env_format(pairs: Vec<Pair>) -> String {
-    let lines: Vec<String> = pairs.into_iter()
-        .map(|pair| format!("{}={}\n", pair.key.to_uppercase(), pair.val))
+pub fn as_env_format(map: HashMap<String, String>) -> String {
+    let lines: Vec<String> = map.into_iter()
+        .map(|(k, v)| format!("{}={}\n", k.to_uppercase(), v))
         .collect();
     lines.join("")
 }
 
-pub fn as_export_format(pairs: Vec<Pair>) -> String {
-    let lines: Vec<String> = pairs.into_iter()
-        .map(|pair| format!("export {}=\"{}\"\n", pair.key.to_uppercase(), escape_for_bash(&pair.val)))
+pub fn as_export_format(map: HashMap<String, String>) -> String {
+    let lines: Vec<String> = map.into_iter()
+        .map(|(k, v)| {
+            let key = k.to_uppercase();
+            let val = base64::encode(&v);
+            format!("export {}=$(echo \"{}\" | base64 --decode -)\n", key, val)
+        })
         .collect();
     lines.join("")
 }
@@ -139,6 +158,18 @@ lazy_static! {
 // Escape $`"!)\ for use in bash
 pub fn escape_for_bash(val: &str) -> String {
     RE.replace_all(val, "\\$1").into_owned()
+}
+
+pub fn merge_with_command(path: &PathBuf) -> Result<HashMap<String, String>, ProvideError> {
+    let output = Command::new(path).output()?;
+    read_from_reader(Box::new(BufReader::new(Cursor::new(output.stdout))))
+}
+
+pub fn run(path_buf: PathBuf) -> Result<Child, ProvideError> {
+    Ok(Command::new(path_buf)
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .spawn()?)
 }
 
 #[cfg(test)]
@@ -161,12 +192,12 @@ mod tests {
 
     #[test]
     fn test_as_env_format() {
-        let pairs = vec![
-            Pair::new("one", "bar"),
-            Pair::new("two", "baz"),
-            Pair::new("THREE", "clock"),
-        ];
-        let env_format = as_env_format(pairs);
+        let map: HashMap<String, String> = vec![
+            ("one".to_owned(), "bar".to_owned()),
+            ("two".to_owned(), "baz".to_owned()),
+            ("THREE".to_owned(), "clock".to_owned()),
+        ].into_iter().collect();
+        let env_format = as_env_format(map);
         let mut result: Vec<&str> = env_format.trim().split("\n").collect();
         result.sort();
         assert_eq!(result, vec!["ONE=bar", "THREE=clock", "TWO=baz"]);

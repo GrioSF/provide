@@ -1,7 +1,8 @@
 use std::env;
 use std::str::FromStr;
+use std::collections::HashMap;
 use std::path::PathBuf;
-use clap::{AppSettings, App, Arg, SubCommand, ArgMatches};
+use clap::{AppSettings, App, Arg, ArgGroup, ArgMatches};
 use rusoto_core::{Region};
 use provider::api;
 use provider::types::*;
@@ -9,60 +10,93 @@ use provider::error::{ProvideError};
 
 fn main() -> Result<(), ProvideError> {
     let matches = App::new("provide")
-        .setting(AppSettings::SubcommandRequiredElseHelp)
         .about("Provides environment variables from AWS Parameter Store")
-        .subcommand(
-            SubCommand::with_name("get")
-                .about("Retrieve environment variables")
-                .arg(Arg::with_name("path")
-                    .required(true)
-                    .value_name("PATH")
-                    .help("The path to search, e.g. /myapp/staging"))
-                .arg(Arg::with_name("profile")
-                    .required(false)
-                    .short("p")
-                    .long("profile")
-                    .takes_value(true)
-                    .value_name("NAME")
-                    .help("Use credentials and region from a local profile"))
-                .arg(Arg::with_name("region")
-                    .required(false)
-                    .short("r")
-                    .long("region")
-                    .takes_value(true)
-                    .value_name("REGION")
-                    .help("Specify region (overrides env, profile)"))
-                .arg(Arg::with_name("include")
-                    .required(false)
-                    .short("i")
-                    .long("include")
-                    .takes_value(true)
-                    .value_name("FILE")
-                    .help("Include these env variables from a file"))
-                .arg(Arg::with_name("format")
-                    .required(false)
-                    .short("f")
-                    .long("format")
-                    .takes_value(true)
-                    .value_name("FORMAT")
-                    .help("Format output, default 'env'"))
-        )
+        .arg(Arg::with_name("get")
+            .long("get")
+            .takes_value(false)
+            .help("Read AWS vars"))
+        .arg(Arg::with_name("set")
+            .long("set")
+            .takes_value(false)
+            .help("Insert or update AWS vars"))
+        .group(ArgGroup::with_name("mode")
+            .args(&["get", "set"])
+            .required(false))
+        .arg(Arg::with_name("application")
+            .required(true)
+            .short("a")
+            .long("appilcation")
+            .value_name("APPLICATION")
+            .help("The application used in path /<application>/<target>/"))
+        .arg(Arg::with_name("target")
+            .required(true)
+            .short("t")
+            .long("target")
+            .takes_value(true)
+            .value_name("TARGET")
+            .help("The target environment used in path /<application>/<target>/"))
+        .arg(Arg::with_name("profile")
+            .required(false)
+            .short("p")
+            .long("profile")
+            .takes_value(true)
+            .value_name("NAME")
+            .help("Use credentials and region from a local profile"))
+        .arg(Arg::with_name("region")
+            .required(false)
+            .short("r")
+            .long("region")
+            .takes_value(true)
+            .value_name("REGION")
+            .help("Specify region (overrides env, profile)"))
+        .arg(Arg::with_name("include")
+            .required(false)
+            .short("i")
+            .long("include")
+            .takes_value(true)
+            .value_name("FILE")
+            .help("Read env variables in key=value format from a file"))
+        .arg(Arg::with_name("merge")
+            .required(false)
+            .short("m")
+            .long("merge")
+            .takes_value(true)
+            .value_name("FILE")
+            .help("Provide initial set of variables and execute FILE, merging output into list of variables"))
+        .arg(Arg::with_name("format")
+            .required(false)
+            .short("f")
+            .long("format")
+            .takes_value(true)
+            .value_name("FORMAT")
+            .help("Format output, default 'env'"))
         .get_matches();
 
-    match matches.subcommand() {
-        ("get", Some(matches)) => {
-            let options = options_from_matches(matches)?;
-            let pairs: Vec<Pair> = api::get_parameters(&options)?;
-            Ok(display(pairs, options.format))
-        },
-        _ => Ok(())
-    }
+    let options = options_from_matches(matches)?;
+    // validate
+    let map: HashMap<String, String> = api::get_parameters(&options)?;
+    Ok(display(map, options.format))
 }
 
-fn options_from_matches(matches: &ArgMatches) -> Result<Options, ProvideError> {
-    let path = matches.value_of("path").unwrap().to_owned();
+fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
+    let has_get = matches.is_present("get");
+    let has_set = matches.is_present("set");
+    let mode = if has_get {
+        Some(Mode::GET)
+    } else if has_set {
+        Some(Mode::SET)
+    } else {
+        None
+    };
+    let app = matches.value_of("app").unwrap().to_owned();
+    let target = matches.value_of("target").unwrap().to_owned();
+    let path = format!("/{}/{}", app, target);
     let region_name = matches.value_of("region");
     let include = match matches.value_of("include") {
+        Some(file_name) => Some(PathBuf::from(file_name)),
+        None => None
+    };
+    let merge = match matches.value_of("merge") {
         Some(file_name) => Some(PathBuf::from(file_name)),
         None => None
     };
@@ -82,13 +116,13 @@ fn options_from_matches(matches: &ArgMatches) -> Result<Options, ProvideError> {
         Some("env") | None => Ok(Format::ENV),
         Some(format_name) => Err(ProvideError::BadFormat(format!("Unknown format {}", format_name)))
     }?;
-    Ok(Options{ path: path, region: region, include: include, format: format })
+    Ok(Options{ mode: mode, path: path, region: region, include: include, format: format, merge: merge })
 }
 
-fn display(pairs: Vec<Pair>, format: Format) {
+fn display(map: HashMap<String, String>, format: Format) {
     let formatted = match format {
-        Format::ENV => api::as_env_format(pairs),
-        Format::EXPORT => api::as_export_format(pairs),
+        Format::ENV => api::as_env_format(map),
+        Format::EXPORT => api::as_export_format(map),
         Format::JSON => unimplemented!()
     };
     print!("{}", formatted);

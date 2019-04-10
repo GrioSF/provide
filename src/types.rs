@@ -2,11 +2,18 @@ use std::path::PathBuf;
 use rusoto_core::{Region};
 use rusoto_ssm::{Parameter};
 
+pub enum Mode {
+  GET,
+  SET
+}
+
 pub struct Options {
+    pub mode: Option<Mode>,
+    pub format: Format,
     pub include: Option<PathBuf>,
+    pub merge: Option<PathBuf>,
     pub path: String, 
     pub region: Region, 
-    pub format: Format
 }
 
 pub struct GetConfig {
@@ -16,19 +23,7 @@ pub struct GetConfig {
     pub acc: Box<Vec<Parameter>>
 }
 
-pub struct Pair {
-    pub key: String,
-    pub val: String
-}
-
-impl Pair {
-    pub fn new(key: &str, val: &str) -> Pair {
-        Pair {
-            key: String::from(key),
-            val: String::from(val)
-        }
-    }
-}
+pub type Pair = (String, String);
 
 pub enum Format {
     EXPORT,
