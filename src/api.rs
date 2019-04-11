@@ -3,20 +3,21 @@ use std::path::MAIN_SEPARATOR;
 use std::path::PathBuf;
 use std::io::{Cursor, BufRead, BufReader};
 use std::fs::File;
-use std::process::{Command, Stdio, Child};
+use std::process::{Command, Stdio};
+use std::str;
 use rusoto_ssm::*;
 use regex::{Regex};
 use base64;
 use crate::types::*;
 use crate::error::ProvideError;
 
-pub fn get_parameters(options: &Options) -> Result<HashMap<String, String>, ProvideError> {
+pub fn get_parameters(options: Options) -> Result<HashMap<String, String>, ProvideError> {
     let mut map = HashMap::<String,String>::new();
     match options.mode {
         Some(Mode::GET) => {
             let aws_parameters = get_parameters_with_acc(GetConfig {
-                path: options.path.to_owned(), 
-                region: options.region.to_owned(), 
+                path: options.path.unwrap(), 
+                region: options.region, 
                 next_token: None, 
                 acc: Box::new(Vec::<Parameter>::new())
             })?;
@@ -94,10 +95,11 @@ fn parse_line(line: String) -> Result<Option<Pair>, ProvideError> {
         Some(0) => Err(ProvideError::BadFormat(String::from("Invalid key has no length"))),
         Some(index) => {
             let key = &line[0..index];
-            let val = &line[index+1..];
+            let encoded_val = &line[index+1..];
+            let val = str::from_utf8(&base64::decode(encoded_val)?)?.to_owned();
             Ok((key, val))
         },
-        None => Err(ProvideError::BadFormat(String::from("Invalid key=value pair")))
+        None => Err(ProvideError::BadFormat(String::from(format!("Invalid key=value pair {}", line))))
     }?;
     Ok(Some((key.to_owned(), val.to_owned())))
 }
@@ -145,7 +147,7 @@ pub fn as_export_format(map: HashMap<String, String>) -> String {
         .map(|(k, v)| {
             let key = k.to_uppercase();
             let val = base64::encode(&v);
-            format!("export {}=$(echo \"{}\" | base64 --decode -)\n", key, val)
+            format!("export {}=$(base64 --decode <<< \"{}\")\n", key, val)
         })
         .collect();
     lines.join("")
@@ -165,11 +167,17 @@ pub fn merge_with_command(path: &PathBuf) -> Result<HashMap<String, String>, Pro
     read_from_reader(Box::new(BufReader::new(Cursor::new(output.stdout))))
 }
 
-pub fn run(path_buf: PathBuf) -> Result<Child, ProvideError> {
-    Ok(Command::new(path_buf)
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()?)
+pub fn run(run: Run, vars: HashMap<String, String>) -> Result<(), ProvideError> {
+    let filename = run.cmd;
+    let mut command = Command::new(&filename);
+    &command.envs(vars);
+    &command.stdout(Stdio::inherit());
+    &command.stderr(Stdio::inherit());
+    &command.args(run.args);
+    match command.spawn() {
+        Ok(_) => Ok(()),
+        Err(err) => Err(From::from(err))
+    }
 }
 
 #[cfg(test)]

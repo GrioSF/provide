@@ -2,9 +2,11 @@ use std::convert::From;
 use std::error::Error;
 use std::fmt;
 use std::io;
+use std::str;
 use regex;
 use rusoto_core::region::ParseRegionError;
 use rusoto_ssm::{GetParametersByPathError};
+use base64;
 
 #[derive(Debug, PartialEq)]
 pub enum ProvideError {
@@ -13,22 +15,25 @@ pub enum ProvideError {
     InvalidPathError(String),
     GetParametersByPathError(GetParametersByPathError),
     ParseRegionError(ParseRegionError),
-    IOError(io::ErrorKind)
+    IOError(io::ErrorKind),
+    Base64Error(base64::DecodeError),
+    UTF8Error(str::Utf8Error)
 }
 
 impl Error for ProvideError {}
 
 impl fmt::Display for ProvideError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let message = match self {
-            ProvideError::BadRegex(err) => format!("BadRegex: {:?}", err),
-            ProvideError::BadFormat(message) => format!("BadFormat: {}", message),
-            ProvideError::GetParametersByPathError(err) => format!("GetParametersByPathError: {}", err),
-            ProvideError::InvalidPathError(message) => format!("InvalidPathError: {}", message),
-            ProvideError::ParseRegionError(err) => format!("ParseRegionError: {}", err),
-            ProvideError::IOError(kind) => format!("IOError: {:?}", kind),
-        };
-        write!(f , "{}", message)
+        match self {
+            ProvideError::BadRegex(err) => f.write_fmt(format_args!("BadRegex: {:?}", err)),
+            ProvideError::BadFormat(message) => f.write_fmt(format_args!("BadFormat: {}", message)),
+            ProvideError::GetParametersByPathError(err) => f.write_fmt(format_args!("GetParametersByPathError: {}", err)),
+            ProvideError::InvalidPathError(message) => f.write_fmt(format_args!("InvalidPathError: {}", message)),
+            ProvideError::ParseRegionError(err) => f.write_fmt(format_args!("ParseRegionError: {}", err)),
+            ProvideError::IOError(kind) => f.write_fmt(format_args!("IOError: {:?}", kind)),
+            ProvideError::Base64Error(err) => f.write_fmt(format_args!("Base64Error: {}", err)),
+            ProvideError::UTF8Error(err) => f.write_fmt(format_args!("UTF8Error: {}", err)),
+        }
     }
 }
 
@@ -47,5 +52,17 @@ impl From<ParseRegionError> for ProvideError {
 impl From<io::Error> for ProvideError {
     fn from(err: io::Error) -> Self {
         ProvideError::IOError(err.kind())
+    }
+}
+
+impl From<base64::DecodeError> for ProvideError {
+    fn from(err: base64::DecodeError) -> Self {
+        ProvideError::Base64Error(err)
+    }
+}
+
+impl From<str::Utf8Error> for ProvideError {
+    fn from(err: str::Utf8Error) -> Self {
+        ProvideError::UTF8Error(err)
     }
 }

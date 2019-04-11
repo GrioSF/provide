@@ -10,26 +10,24 @@ use provider::error::{ProvideError};
 
 fn main() -> Result<(), ProvideError> {
     let matches = App::new("provide")
+        .settings(&[AppSettings::TrailingVarArg])
         .about("Provides environment variables from AWS Parameter Store")
         .arg(Arg::with_name("get")
             .long("get")
             .takes_value(false)
+            .requires_all(&["application", "target"])
             .help("Read AWS vars"))
-        .arg(Arg::with_name("set")
-            .long("set")
-            .takes_value(false)
-            .help("Insert or update AWS vars"))
         .group(ArgGroup::with_name("mode")
-            .args(&["get", "set"])
+            .args(&["get"])
             .required(false))
         .arg(Arg::with_name("application")
-            .required(true)
+            .required(false)
             .short("a")
-            .long("appilcation")
+            .long("application")
             .value_name("APPLICATION")
             .help("The application used in path /<application>/<target>/"))
         .arg(Arg::with_name("target")
-            .required(true)
+            .required(false)
             .short("t")
             .long("target")
             .takes_value(true)
@@ -70,12 +68,21 @@ fn main() -> Result<(), ProvideError> {
             .takes_value(true)
             .value_name("FORMAT")
             .help("Format output, default 'env'"))
+        .arg(Arg::with_name("cmd")
+            .required(false)
+            .multiple(true)
+            .value_name("CMD")
+            .help("Provide vars to given command"))
         .get_matches();
 
     let options = options_from_matches(matches)?;
-    // validate
-    let map: HashMap<String, String> = api::get_parameters(&options)?;
-    Ok(display(map, options.format))
+    let format = options.format.clone();
+    let maybe_run = options.run.clone();
+    let vars: HashMap<String, String> = api::get_parameters(options)?;
+    match maybe_run {
+        Some(run) => Ok(api::run(run, vars)?),
+        None => Ok(display(vars, format))
+    }
 }
 
 fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
@@ -88,9 +95,12 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
     } else {
         None
     };
-    let app = matches.value_of("app").unwrap().to_owned();
-    let target = matches.value_of("target").unwrap().to_owned();
-    let path = format!("/{}/{}", app, target);
+    let app = matches.value_of("application");
+    let target = matches.value_of("target");
+    let path = match (app, target) {
+        (Some(app), Some(target)) => Some(format!("/{}/{}", app, target)),
+        _ => None
+    };
     let region_name = matches.value_of("region");
     let include = match matches.value_of("include") {
         Some(file_name) => Some(PathBuf::from(file_name)),
@@ -116,7 +126,20 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
         Some("env") | None => Ok(Format::ENV),
         Some(format_name) => Err(ProvideError::BadFormat(format!("Unknown format {}", format_name)))
     }?;
-    Ok(Options{ mode: mode, path: path, region: region, include: include, format: format, merge: merge })
+    let cmds: Option<Vec<String>> = match matches.values_of("cmd") {
+        Some(vals) => Some(vals.map(|v| String::from(v)).collect()),
+        None => None
+    };
+    let run = match cmds {
+        Some(vars) => {
+            match vars.split_at(1) {
+                ([head], tail) => Some(Run{ cmd: PathBuf::from(head), args: tail.to_owned()}),
+                _ => None
+            }
+        },
+        None => None
+    };
+    Ok(Options{ mode: mode, path: path, region: region, include: include, format: format, merge: merge, run: run })
 }
 
 fn display(map: HashMap<String, String>, format: Format) {
