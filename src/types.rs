@@ -11,12 +11,13 @@ pub enum Mode {
 #[derive(Debug)]
 pub struct Options {
     pub mode: Option<Mode>,
-    pub format: Format,
+    pub format_config: FormatConfig,
     pub include: Option<PathBuf>,
     pub merge: Option<PathBuf>,
     pub path: Option<String>, 
     pub region: Region, 
-    pub run: Option<Run>
+    pub run: Option<Run>,
+    pub env_vars: Option<Vec<String>>,
 }
 
 pub struct GetConfig {
@@ -33,6 +34,12 @@ pub enum Format {
     EXPORT,
     ENV,
     JSON
+}
+
+#[derive(Copy, Clone, Debug)]
+pub struct FormatConfig {
+    pub format: Format,
+    pub raw: bool
 }
 
 impl Default for Format {

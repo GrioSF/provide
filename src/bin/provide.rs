@@ -73,15 +73,27 @@ fn main() -> Result<(), ProvideError> {
             .multiple(true)
             .value_name("CMD")
             .help("Provide vars to given command"))
+        .arg(Arg::with_name("env-var")
+            .required(false)
+            .short("e")
+            .long("env-var")
+            .multiple(true)
+            .value_name("KEY=VAR")
+            .help("Manually set a var where VAR is encoded base64"))
+        .arg(Arg::with_name("raw")
+            .required(false)
+            .long("raw")
+            .takes_value(false)
+            .help("Do not base64 encode values on output"))
         .get_matches();
 
     let options = options_from_matches(matches)?;
-    let format = options.format.clone();
+    let format_config = options.format_config.clone();
     let maybe_run = options.run.clone();
     let vars: HashMap<String, String> = api::get_parameters(options)?;
     match maybe_run {
         Some(run) => Ok(api::run(run, vars)?),
-        None => Ok(display(vars, format))
+        None => Ok(display(vars, format_config))
     }
 }
 
@@ -126,26 +138,30 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
         Some("env") | None => Ok(Format::ENV),
         Some(format_name) => Err(ProvideError::BadFormat(format!("Unknown format {}", format_name)))
     }?;
+    let raw = matches.is_present("raw");
+    let format_config = FormatConfig{format, raw};
+    let env_vars: Option<Vec<String>> = match matches.values_of("env-var") {
+        Some(values) => Some(values.map(|v| v.to_owned()).collect()),
+        None => None
+    };
     let cmds: Option<Vec<String>> = match matches.values_of("cmd") {
         Some(vals) => Some(vals.map(|v| String::from(v)).collect()),
         None => None
     };
     let run = match cmds {
-        Some(vars) => {
-            match vars.split_at(1) {
-                ([head], tail) => Some(Run{ cmd: PathBuf::from(head), args: tail.to_owned()}),
-                _ => None
-            }
+        Some(vars) => match vars.split_at(1) {
+            ([head], tail) => Some(Run{ cmd: PathBuf::from(head), args: tail.to_owned()}),
+            _ => None
         },
         None => None
     };
-    Ok(Options{ mode: mode, path: path, region: region, include: include, format: format, merge: merge, run: run })
+    Ok(Options{ mode, path, region, include, format_config, merge, run, env_vars })
 }
 
-fn display(map: HashMap<String, String>, format: Format) {
-    let formatted = match format {
-        Format::ENV => api::as_env_format(map),
-        Format::EXPORT => api::as_export_format(map),
+fn display(map: HashMap<String, String>, format_config: FormatConfig) {
+    let formatted = match format_config.format {
+        Format::ENV => api::as_env_format(map, format_config.raw),
+        Format::EXPORT => api::as_export_format(map, format_config.raw),
         Format::JSON => unimplemented!()
     };
     print!("{}", formatted);

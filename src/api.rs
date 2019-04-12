@@ -32,6 +32,10 @@ pub fn get_parameters(options: Options) -> Result<HashMap<String, String>, Provi
     } {
         map.extend(include_map);
     };
+    if options.env_vars.is_some() {
+        let given_map = merge_with_given(options.env_vars.unwrap())?;
+        map.extend(given_map);
+    };
     if let Some(merge_map) = match &options.merge {
         Some(path_buf) => Some(merge_with_command(path_buf)?),
         None => None
@@ -135,19 +139,28 @@ fn extract_key_from_path(param_path: &str) -> Result<String, ProvideError> {
 
     Intended to output to a file or to be evaled
 */
-pub fn as_env_format(map: HashMap<String, String>) -> String {
+pub fn as_env_format(map: HashMap<String, String>, raw: bool) -> String {
     let lines: Vec<String> = map.into_iter()
-        .map(|(k, v)| format!("{}={}\n", k.to_uppercase(), v))
+        .map(|(k, v)| {
+            let key = k.to_uppercase();
+            let val = if raw { v } else { base64::encode(&v) };
+            format!("{}={}\n", key, val)
+        })
         .collect();
     lines.join("")
 }
 
-pub fn as_export_format(map: HashMap<String, String>) -> String {
+pub fn as_export_format(map: HashMap<String, String>, raw: bool) -> String {
     let lines: Vec<String> = map.into_iter()
         .map(|(k, v)| {
             let key = k.to_uppercase();
-            let val = base64::encode(&v);
-            format!("export {}=$(base64 --decode <<< \"{}\")\n", key, val)
+            if raw {
+                let val = base64::encode(&v);
+                format!("export {}={}\n", key, val)
+            } else {
+                let val = base64::encode(&v);
+                format!("export {}=$(base64 --decode <<< \"{}\")\n", key, val)
+            }
         })
         .collect();
     lines.join("")
@@ -160,6 +173,15 @@ lazy_static! {
 // Escape $`"!)\ for use in bash
 pub fn escape_for_bash(val: &str) -> String {
     RE.replace_all(val, "\\$1").into_owned()
+}
+
+pub fn merge_with_given(lines: Vec<String>) -> Result<HashMap<String, String>, ProvideError> {
+    let lines_iter = lines.into_iter().map(|line| parse_line(line));
+    let lines: Result<Vec<Option<Pair>>, ProvideError> = lines_iter.collect();
+    match lines {
+        Ok(list) => Ok(list.into_iter().filter(|pair| pair.is_some()).map(|p| p.unwrap()).collect()),
+        Err(err) => Err(err)
+    }
 }
 
 pub fn merge_with_command(path: &PathBuf) -> Result<HashMap<String, String>, ProvideError> {
@@ -205,7 +227,7 @@ mod tests {
             ("two".to_owned(), "baz".to_owned()),
             ("THREE".to_owned(), "clock".to_owned()),
         ].into_iter().collect();
-        let env_format = as_env_format(map);
+        let env_format = as_env_format(map, true);
         let mut result: Vec<&str> = env_format.trim().split("\n").collect();
         result.sort();
         assert_eq!(result, vec!["ONE=bar", "THREE=clock", "TWO=baz"]);
