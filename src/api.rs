@@ -42,6 +42,12 @@ pub fn get_parameters(options: Options) -> Result<HashMap<String, String>, Provi
     } {
         map.extend(merge_map);
     };
+    if let Some(app) = options.app {
+        map.entry("PROVIDE_APPLICATION".to_owned()).or_insert(app);
+    };
+    if let Some(target) = options.target {
+        map.entry("PROVIDE_TARGET".to_owned()).or_insert(target);
+    };
     Ok(map)
 }
 

@@ -112,10 +112,10 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
     } else {
         None
     };
-    let app = matches.value_of("application");
-    let target = matches.value_of("target");
-    let path = match (app, target) {
-        (Some(app), Some(target)) => Some(format!("/{}/{}", app, target)),
+    let app = matches.value_of("application").map(|app| app.to_owned());
+    let target = matches.value_of("target").map(|app| app.to_owned());
+    let path = match (&app, &target) {
+        (Some(a), Some(t)) => Some(format!("/{}/{}", a, t)),
         _ => None
     };
     let region_name = matches.value_of("region");
@@ -160,7 +160,7 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
         },
         None => None
     };
-    Ok(Options{ mode, path, region, include, format_config, merge, run, env_vars })
+    Ok(Options{ mode, app, target, path, region, include, format_config, merge, run, env_vars })
 }
 
 fn display(map: HashMap<String, String>, format_config: FormatConfig) {

@@ -14,6 +14,8 @@ pub struct Options {
     pub format_config: FormatConfig,
     pub include: Option<PathBuf>,
     pub merge: Option<PathBuf>,
+    pub app: Option<String>, 
+    pub target: Option<String>, 
     pub path: Option<String>, 
     pub region: Region, 
     pub run: Option<Run>,
