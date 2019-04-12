@@ -56,6 +56,7 @@ fn main() -> Result<(), ProvideError> {
             .required(false)
             .short("i")
             .long("include")
+            .multiple(true)
             .takes_value(true)
             .value_name("FILE")
             .help("Read env variables in key=value format from a file"))
@@ -64,6 +65,7 @@ fn main() -> Result<(), ProvideError> {
             .short("m")
             .long("merge")
             .takes_value(true)
+            .multiple(true)
             .value_name("FILE")
             .help("Provide initial set of variables and execute FILE, merging output into list of variables"))
         .arg(Arg::with_name("format")
@@ -105,6 +107,7 @@ fn main() -> Result<(), ProvideError> {
 fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
     let has_get = matches.is_present("get");
     let has_set = matches.is_present("set");
+    
     let mode = if has_get {
         Some(Mode::GET)
     } else if has_set {
@@ -112,47 +115,67 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
     } else {
         None
     };
+    
     let app = matches.value_of("application").map(|app| app.to_owned());
+    
     let target = matches.value_of("target").map(|app| app.to_owned());
+    
     let path = match (&app, &target) {
         (Some(a), Some(t)) => Some(format!("/{}/{}", a, t)),
         _ => None
     };
+    
     let region_name = matches.value_of("region");
-    let include = match matches.value_of("include") {
-        Some(file_name) => Some(PathBuf::from(file_name)),
+    
+    let includes = match matches.values_of("include") {
+        Some(values) => {
+            let file_names: Vec<&str> = values.collect();
+            Some(file_names.into_iter().map(|file_name| PathBuf::from(file_name)).collect())
+        },
         None => None
     };
-    let merge = match matches.value_of("merge") {
-        Some(file_name) => Some(PathBuf::from(file_name)),
+    
+    let merges = match matches.values_of("merge") {
+        Some(values) => {
+            let file_names: Vec<&str> = values.collect();
+            Some(file_names.into_iter().map(|file_name| PathBuf::from(file_name)).collect())
+        },
         None => None
     };
+    
     let profile = matches.value_of("profile");
     if profile.is_some() {
         // The only way I've found to have rusoto honor given profile since ProfileProvider
         // ignores it. Note this is only set for the current process.
         env::set_var("AWS_PROFILE", profile.unwrap());
     }
+    
     let region = match region_name {
         Some(name) => Region::from_str(name)?,
         None => Region::default() // will return a region defined in the env, profile, or default see method doc
     };
+    
     let format = match matches.value_of("format") {
         Some("export") => Ok(Format::EXPORT),
         Some("json") => Ok(Format::JSON),
         Some("env") | None => Ok(Format::ENV),
         Some(format_name) => Err(ProvideError::BadFormat(format!("Unknown format {}", format_name)))
     }?;
+    
     let raw = matches.is_present("raw");
+    
     let format_config = FormatConfig{format, raw};
+    
     let env_vars: Option<Vec<String>> = match matches.values_of("env-var") {
         Some(values) => Some(values.map(|v| v.to_owned()).collect()),
         None => None
     };
+    
     let cmds: Option<Vec<String>> = match matches.values_of("cmd") {
         Some(vals) => Some(vals.map(|v| String::from(v)).collect()),
         None => None
     };
+    
     let run = match cmds {
         Some(vars) => match vars.split_at(1) {
             ([head], tail) => Some(Run{ cmd: PathBuf::from(head), args: tail.to_owned()}),
@@ -160,7 +183,8 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
         },
         None => None
     };
-    Ok(Options{ mode, app, target, path, region, include, format_config, merge, run, env_vars })
+    
+    Ok(Options{ mode, app, target, path, region, includes, format_config, merges, run, env_vars })
 }
 
 fn display(map: HashMap<String, String>, format_config: FormatConfig) {

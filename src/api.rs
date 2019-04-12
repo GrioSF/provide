@@ -26,21 +26,25 @@ pub fn get_parameters(options: Options) -> Result<HashMap<String, String>, Provi
         },
         _ => ()
     }
-    if let Some(include_map) = match &options.include {
-        Some(path_buf) => Some(read_pairs_from_file(path_buf)?),
+    if let Some(include_maps) = match &options.includes {
+        Some(path_bufs) => Some(read_pairs_from_files(path_bufs)?),
         None => None
     } {
-        map.extend(include_map);
+        for include_map in include_maps.into_iter() {
+            map.extend(include_map);
+        }
     };
     if options.env_vars.is_some() {
         let given_map = merge_with_given(options.env_vars.unwrap())?;
         map.extend(given_map);
     };
-    if let Some(merge_map) = match &options.merge {
-        Some(path_buf) => Some(merge_with_command(path_buf)?),
+    if let Some(merge_maps) = match &options.merges {
+        Some(path_bufs) => Some(merge_with_commands(path_bufs)?),
         None => None
     } {
-        map.extend(merge_map);
+        for merge_map in merge_maps.into_iter() {
+            map.extend(merge_map);
+        }
     };
     if let Some(app) = options.app {
         map.entry("PROVIDE_APPLICATION".to_owned()).or_insert(app);
@@ -76,6 +80,10 @@ fn get_parameters_with_acc(mut get_config: GetConfig) -> Result<Box<Vec<Paramete
         },
         Err(err) => Err(From::from(err)),
     }
+}
+
+pub fn read_pairs_from_files(paths: &Vec<PathBuf>) -> Result<Vec<HashMap<String, String>>, ProvideError> {
+    paths.iter().map(read_pairs_from_file).collect()
 }
 
 pub fn read_pairs_from_file(path: &PathBuf) -> Result<HashMap<String, String>, ProvideError> {
@@ -188,6 +196,10 @@ pub fn merge_with_given(lines: Vec<String>) -> Result<HashMap<String, String>, P
         Ok(list) => Ok(list.into_iter().filter(|pair| pair.is_some()).map(|p| p.unwrap()).collect()),
         Err(err) => Err(err)
     }
+}
+
+pub fn merge_with_commands(paths: &Vec<PathBuf>) -> Result<Vec<HashMap<String, String>>, ProvideError> {
+    paths.iter().map(merge_with_command).collect()
 }
 
 pub fn merge_with_command(path: &PathBuf) -> Result<HashMap<String, String>, ProvideError> {

@@ -12,8 +12,8 @@ pub enum Mode {
 pub struct Options {
     pub mode: Option<Mode>,
     pub format_config: FormatConfig,
-    pub include: Option<PathBuf>,
-    pub merge: Option<PathBuf>,
+    pub includes: Option<Vec<PathBuf>>,
+    pub merges: Option<Vec<PathBuf>>,
     pub app: Option<String>, 
     pub target: Option<String>, 
     pub path: Option<String>, 
