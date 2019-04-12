@@ -202,7 +202,7 @@ pub fn run(run: Run, vars: HashMap<String, String>) -> Result<(), ProvideError> 
     &command.stdout(Stdio::inherit());
     &command.stderr(Stdio::inherit());
     &command.args(run.args);
-    match command.spawn() {
+    match command.status() {
         Ok(_) => Ok(()),
         Err(err) => Err(From::from(err))
     }
