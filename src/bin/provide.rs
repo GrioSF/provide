@@ -127,7 +127,7 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
     
     let region_name = matches.value_of("region");
     
-    let includes = match matches.values_of("include") {
+    let includes: Option<Vec<PathBuf>> = match matches.values_of("include") {
         Some(values) => {
             let file_names: Vec<&str> = values.collect();
             Some(file_names.into_iter().map(|file_name| PathBuf::from(file_name)).collect())
@@ -135,7 +135,7 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
         None => None
     };
     
-    let merges = match matches.values_of("merge") {
+    let merges: Option<Vec<PathBuf>> = match matches.values_of("merge") {
         Some(values) => {
             let file_names: Vec<&str> = values.collect();
             Some(file_names.into_iter().map(|file_name| PathBuf::from(file_name)).collect())
