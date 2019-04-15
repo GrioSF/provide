@@ -17,7 +17,7 @@ pub enum ProvideError {
     InvalidPathError(String),
     GetParametersByPathError(GetParametersByPathError),
     ParseRegionError(ParseRegionError),
-    IOError(io::ErrorKind),
+    IOError(io::ErrorKind, String),
     Base64Error(base64::DecodeError),
     UTF8Error(str::Utf8Error),
     EnvError(env::VarError)
@@ -34,7 +34,7 @@ impl fmt::Display for ProvideError {
             ProvideError::GetParametersByPathError(err) => f.write_fmt(format_args!("GetParametersByPathError: {}", err)),
             ProvideError::InvalidPathError(message) => f.write_fmt(format_args!("InvalidPathError: {}", message)),
             ProvideError::ParseRegionError(err) => f.write_fmt(format_args!("ParseRegionError: {}", err)),
-            ProvideError::IOError(kind) => f.write_fmt(format_args!("IOError: {:?}", kind)),
+            ProvideError::IOError(kind, message) => f.write_fmt(format_args!("IOError: {:?} {}", kind, message)),
             ProvideError::Base64Error(err) => f.write_fmt(format_args!("Base64Error: {}", err)),
             ProvideError::UTF8Error(err) => f.write_fmt(format_args!("UTF8Error: {}", err)),
             ProvideError::EnvError(err) => f.write_fmt(format_args!("EnvError: {}", err)),
@@ -56,7 +56,8 @@ impl From<ParseRegionError> for ProvideError {
 
 impl From<io::Error> for ProvideError {
     fn from(err: io::Error) -> Self {
-        ProvideError::IOError(err.kind())
+        let message = err.description().to_owned();
+        ProvideError::IOError(err.kind(), message)
     }
 }
 
