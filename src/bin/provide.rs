@@ -85,8 +85,17 @@ fn main() -> Result<(), ProvideError> {
             .short("e")
             .long("env-var")
             .multiple(true)
-            .value_name("KEY=VAR")
-            .help("Manually set a var where VAR is encoded base64"))
+            .takes_value(true)
+            .value_name("ENV_VAR_NAME")
+            .help("Capture env var"))
+        .arg(Arg::with_name("env-var-base64")
+            .required(false)
+            .short("b")
+            .long("env-var-base64")
+            .multiple(true)
+            .takes_value(true)
+            .value_name("ENV_VAR_NAME")
+            .help("Capture env var where var is base64"))
         .arg(Arg::with_name("raw")
             .required(false)
             .long("raw")
@@ -171,6 +180,11 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
         None => None
     };
     
+    let env_vars_base64: Option<Vec<String>> = match matches.values_of("env-var-base64") {
+        Some(values) => Some(values.map(|v| v.to_owned()).collect()),
+        None => None
+    };
+    
     let cmds: Option<Vec<String>> = match matches.values_of("cmd") {
         Some(vals) => Some(vals.map(|v| String::from(v)).collect()),
         None => None
@@ -184,7 +198,7 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
         None => None
     };
     
-    Ok(Options{ mode, app, target, path, region, includes, format_config, merges, run, env_vars })
+    Ok(Options{ mode, app, target, path, region, includes, format_config, merges, run, env_vars, env_vars_base64 })
 }
 
 fn display(map: HashMap<String, String>, format_config: FormatConfig) {

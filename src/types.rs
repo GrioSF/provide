@@ -10,16 +10,17 @@ pub enum Mode {
 
 #[derive(Debug)]
 pub struct Options {
-    pub mode: Option<Mode>,
+    pub app: Option<String>, 
+    pub env_vars: Option<Vec<String>>,
+    pub env_vars_base64: Option<Vec<String>>,
     pub format_config: FormatConfig,
     pub includes: Option<Vec<PathBuf>>,
     pub merges: Option<Vec<PathBuf>>,
-    pub app: Option<String>, 
-    pub target: Option<String>, 
+    pub mode: Option<Mode>,
     pub path: Option<String>, 
     pub region: Region, 
     pub run: Option<Run>,
-    pub env_vars: Option<Vec<String>>,
+    pub target: Option<String>, 
 }
 
 pub struct GetConfig {
