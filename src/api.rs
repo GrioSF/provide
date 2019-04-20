@@ -28,7 +28,7 @@ pub fn get_parameters(options: Options) -> Result<HashMap<String, String>, Provi
         _ => ()
     }
     if let Some(include_maps) = match &options.includes {
-        Some(path_bufs) => Some(read_pairs_from_files(path_bufs, false)?),
+        Some(path_bufs) => Some(read_pairs_from_files(path_bufs, true)?),
         None => None
     } {
         for include_map in include_maps.into_iter() {
