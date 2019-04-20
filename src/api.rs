@@ -35,17 +35,17 @@ pub fn get_parameters(options: Options) -> Result<HashMap<String, String>, Provi
             map.extend(include_map);
         }
     };
-    if options.env_vars.is_some() {
-        for env_var in options.env_vars.unwrap() {
-            let (key, val): Pair = merge_with_env(env_var, false)?;
-            map.entry(key).or_insert(val);
-        }
+    if let Some(env_var_map) = match &options.env_vars {
+        Some(lines) => Some(merge_with_given(lines, false)?),
+        None => None
+    } {
+        map.extend(env_var_map);
     };
-    if options.env_vars_base64.is_some() {
-        for env_var in options.env_vars_base64.unwrap() {
-            let (key, val): Pair = merge_with_env(env_var, true)?;
-            map.entry(key).or_insert(val);
-        }
+    if let Some(env_var_map) = match &options.env_vars_base64 {
+        Some(lines) => Some(merge_with_given(lines, true)?),
+        None => None
+    } {
+        map.extend(env_var_map);
     };
     if let Some(merge_maps) = match &options.merges {
         Some(path_bufs) => Some(merge_with_commands(path_bufs, &map)?),
@@ -104,7 +104,7 @@ pub fn read_pairs_from_file(path: &PathBuf, use_base64: bool) -> Result<HashMap<
 pub fn read_from_reader(reader: Box<BufRead>, use_base64: bool) -> Result<HashMap<String, String>, ProvideError> {
     let lines_iter = reader.lines().map(|line| {
         match line {
-            Ok(text) => parse_line(text, use_base64),
+            Ok(text) => parse_line(&text, use_base64),
             Err(err) => Err(From::from(err))
         }
     });
@@ -115,7 +115,7 @@ pub fn read_from_reader(reader: Box<BufRead>, use_base64: bool) -> Result<HashMa
     }
 }
 
-fn parse_line(line: String, use_base64: bool) -> Result<Option<Pair>, ProvideError> {
+fn parse_line(line: &str, use_base64: bool) -> Result<Option<Pair>, ProvideError> {
     if line.is_empty() {
         return Ok(None);
     }
@@ -202,8 +202,8 @@ pub fn escape_for_bash(val: &str) -> String {
     RE.replace_all(val, "\\$1").into_owned()
 }
 
-pub fn merge_with_given(lines: Vec<String>, use_base64: bool) -> Result<HashMap<String, String>, ProvideError> {
-    let lines_iter = lines.into_iter().map(|line| parse_line(line, use_base64));
+pub fn merge_with_given(lines: &Vec<String>, use_base64: bool) -> Result<HashMap<String, String>, ProvideError> {
+    let lines_iter = lines.iter().map(|line| parse_line(line, use_base64));
     let lines: Result<Vec<Option<Pair>>, ProvideError> = lines_iter.collect();
     match lines {
         Ok(list) => Ok(list.into_iter().filter(|pair| pair.is_some()).map(|p| p.unwrap()).collect()),
