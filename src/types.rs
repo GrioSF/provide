@@ -18,7 +18,7 @@ pub struct Options {
     pub mode: Option<Mode>,
     pub path: Option<String>,
     pub region: Region,
-    pub run: Option<Run>,
+    pub run: Option<RunConfig>,
     pub target: Option<String>,
 }
 
@@ -51,7 +51,7 @@ pub struct FormatConfig {
 }
 
 #[derive(Clone, Debug, PartialEq, Default)]
-pub struct Run {
+pub struct RunConfig {
     pub cmd: String,
     pub args: Vec<String>,
 }

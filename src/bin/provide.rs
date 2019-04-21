@@ -11,11 +11,11 @@ fn main() -> Result<(), ProvideError> {
     let matches = app().get_matches();
     let options = options_from_matches(matches)?;
     let format_config = options.format_config.clone();
-    let maybe_run = options.run.clone();
+    let maybe_run_config = options.run.clone();
     let vars: HashMap<String, String> = api::get_parameters(options)?;
-    match maybe_run {
-        Some(run) => Ok(api::run(run, vars)?),
-        None => Ok(display(vars, format_config)),
+    match maybe_run_config {
+        Some(run_config) => Ok(api::run(run_config, vars)?),
+        None => Ok(display(format_config, vars)),
     }
 }
 
@@ -208,7 +208,7 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
 
     let run = match cmds {
         Some(vars) => match vars.split_at(1) {
-            ([head], tail) => Some(Run {
+            ([head], tail) => Some(RunConfig {
                 cmd: head.to_owned(),
                 args: tail.to_owned(),
             }),
@@ -232,7 +232,7 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
     })
 }
 
-fn display(map: HashMap<String, String>, format_config: FormatConfig) {
+fn display(format_config: FormatConfig, map: HashMap<String, String>) {
     let formatted = match format_config.format {
         Format::ENV => api::as_env_format(map, format_config.raw),
         Format::EXPORT => api::as_export_format(map, format_config.raw),
@@ -253,9 +253,9 @@ mod tests {
             options.unwrap(),
             Options {
                 includes: Some(vec!["include_file_1".to_owned()]),
-                run: Some(Run {
+                run: Some(RunConfig {
                     cmd: "cmd".to_owned(),
-                    ..Run::default()
+                    ..RunConfig::default()
                 }),
                 ..Options::default()
             }
@@ -270,9 +270,9 @@ mod tests {
             options.unwrap(),
             Options {
                 merges: Some(vec!["merge_file_1".to_owned()]),
-                run: Some(Run {
+                run: Some(RunConfig {
                     cmd: "cmd".to_owned(),
-                    ..Run::default()
+                    ..RunConfig::default()
                 }),
                 ..Options::default()
             }

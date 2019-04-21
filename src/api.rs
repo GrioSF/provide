@@ -286,13 +286,13 @@ pub fn merge_with_command(
     }
 }
 
-pub fn run(run: Run, vars: HashMap<String, String>) -> Result<(), ProvideError> {
-    let filename = run.cmd;
+pub fn run(run_config: RunConfig, vars: HashMap<String, String>) -> Result<(), ProvideError> {
+    let filename = run_config.cmd;
     let mut command = Command::new(&filename);
     &command.envs(vars);
     &command.stdout(Stdio::inherit());
     &command.stderr(Stdio::inherit());
-    &command.args(run.args);
+    &command.args(run_config.args);
     match command.status() {
         Ok(status) => match status.code() {
             Some(0) => Ok(()),
