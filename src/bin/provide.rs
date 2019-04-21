@@ -5,7 +5,6 @@ use provider::types::*;
 use rusoto_core::Region;
 use std::collections::HashMap;
 use std::env;
-use std::path::PathBuf;
 use std::str::FromStr;
 
 fn main() -> Result<(), ProvideError> {
@@ -156,29 +155,13 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
 
     let region_name = matches.value_of("region");
 
-    let includes: Option<Vec<PathBuf>> = match matches.values_of("include") {
-        Some(values) => {
-            let file_names: Vec<&str> = values.collect();
-            Some(
-                file_names
-                    .into_iter()
-                    .map(|file_name| PathBuf::from(file_name))
-                    .collect(),
-            )
-        }
+    let includes: Option<Vec<String>> = match matches.values_of("include") {
+        Some(values) => Some(values.map(|val| String::from(val)).collect()),
         None => None,
     };
 
-    let merges: Option<Vec<PathBuf>> = match matches.values_of("merge") {
-        Some(values) => {
-            let file_names: Vec<&str> = values.collect();
-            Some(
-                file_names
-                    .into_iter()
-                    .map(|file_name| PathBuf::from(file_name))
-                    .collect(),
-            )
-        }
+    let merges: Option<Vec<String>> = match matches.values_of("merge") {
+        Some(values) => Some(values.map(|val| String::from(val)).collect()),
         None => None,
     };
 
@@ -226,7 +209,7 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
     let run = match cmds {
         Some(vars) => match vars.split_at(1) {
             ([head], tail) => Some(Run {
-                cmd: PathBuf::from(head),
+                cmd: head.to_owned(),
                 args: tail.to_owned(),
             }),
             _ => None,
@@ -256,4 +239,43 @@ fn display(map: HashMap<String, String>, format_config: FormatConfig) {
         Format::JSON => unimplemented!(),
     };
     print!("{}", formatted);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_include_only_accepts_one_value() {
+        let m = app().get_matches_from(vec!["provide", "--include", "include_file_1", "cmd"]);
+        let options = options_from_matches(m);
+        assert_eq!(
+            options.unwrap(),
+            Options {
+                includes: Some(vec!["include_file_1".to_owned()]),
+                run: Some(Run {
+                    cmd: "cmd".to_owned(),
+                    ..Run::default()
+                }),
+                ..Options::default()
+            }
+        );
+    }
+
+    #[test]
+    fn test_merge_only_accepts_one_value() {
+        let m = app().get_matches_from(vec!["provide", "--merge", "merge_file_1", "cmd"]);
+        let options = options_from_matches(m);
+        assert_eq!(
+            options.unwrap(),
+            Options {
+                merges: Some(vec!["merge_file_1".to_owned()]),
+                run: Some(Run {
+                    cmd: "cmd".to_owned(),
+                    ..Run::default()
+                }),
+                ..Options::default()
+            }
+        );
+    }
 }

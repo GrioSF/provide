@@ -1,21 +1,20 @@
 use rusoto_core::Region;
 use rusoto_ssm::Parameter;
-use std::path::PathBuf;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Mode {
     GET,
     SET,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Default)]
 pub struct Options {
     pub app: Option<String>,
     pub env_vars: Option<Vec<String>>,
     pub env_vars_base64: Option<Vec<String>>,
     pub format_config: FormatConfig,
-    pub includes: Option<Vec<PathBuf>>,
-    pub merges: Option<Vec<PathBuf>>,
+    pub includes: Option<Vec<String>>,
+    pub merges: Option<Vec<String>>,
     pub mode: Option<Mode>,
     pub path: Option<String>,
     pub region: Region,
@@ -32,17 +31,11 @@ pub struct GetConfig {
 
 pub type Pair = (String, String);
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Format {
     EXPORT,
     ENV,
     JSON,
-}
-
-#[derive(Copy, Clone, Debug)]
-pub struct FormatConfig {
-    pub format: Format,
-    pub raw: bool,
 }
 
 impl Default for Format {
@@ -51,8 +44,14 @@ impl Default for Format {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Default)]
+pub struct FormatConfig {
+    pub format: Format,
+    pub raw: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Default)]
 pub struct Run {
-    pub cmd: PathBuf,
+    pub cmd: String,
     pub args: Vec<String>,
 }

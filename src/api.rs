@@ -92,7 +92,7 @@ fn get_parameters_with_acc(mut get_config: GetConfig) -> Result<Box<Vec<Paramete
 }
 
 pub fn read_pairs_from_files(
-    paths: &Vec<PathBuf>,
+    paths: &Vec<String>,
     use_base64: bool,
 ) -> Result<Vec<HashMap<String, String>>, ProvideError> {
     paths
@@ -102,7 +102,7 @@ pub fn read_pairs_from_files(
 }
 
 pub fn read_pairs_from_file(
-    path: &PathBuf,
+    path: &String,
     use_base64: bool,
 ) -> Result<HashMap<String, String>, ProvideError> {
     let path_buf = fs::canonicalize(path)?;
@@ -262,7 +262,7 @@ pub fn merge_with_env(line: String, use_base64: bool) -> Result<Pair, ProvideErr
 }
 
 pub fn merge_with_commands(
-    paths: &Vec<PathBuf>,
+    paths: &Vec<String>,
     vars: &HashMap<String, String>,
 ) -> Result<Vec<HashMap<String, String>>, ProvideError> {
     paths
@@ -272,7 +272,7 @@ pub fn merge_with_commands(
 }
 
 pub fn merge_with_command(
-    path: &PathBuf,
+    path: &String,
     vars: &HashMap<String, String>,
 ) -> Result<HashMap<String, String>, ProvideError> {
     let path_buf = fs::canonicalize(path)?;
