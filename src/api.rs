@@ -141,7 +141,7 @@ fn parse_line(line: &str, use_base64: bool) -> Result<Option<Pair>, ProvideError
             let key = &line[0..index];
             let encoded_val = &line[index + 1..];
             let val = match use_base64 {
-                true => str::from_utf8(&base64::decode(encoded_val)?)?.to_owned(),
+                true => String::from_utf8(base64::decode(encoded_val)?)?,
                 false => encoded_val.to_owned(),
             };
             Ok((key, val))
@@ -254,7 +254,7 @@ pub fn merge_with_env(line: String, use_base64: bool) -> Result<Pair, ProvideErr
     let key = line;
     let env_val = env::var(&key)?;
     let val = if use_base64 {
-        str::from_utf8(&base64::decode(&env_val)?)?.to_owned()
+        String::from_utf8(base64::decode(&env_val)?)?
     } else {
         env_val
     };
@@ -281,9 +281,7 @@ pub fn merge_with_command(
     let output = command.output()?;
     match output.status.code() {
         Some(0) => read_from_reader(Box::new(BufReader::new(Cursor::new(output.stdout))), true),
-        Some(_) => Err(ProvideError::Error(String::from(str::from_utf8(
-            &output.stderr,
-        )?))),
+        Some(_) => Err(ProvideError::Error(String::from_utf8(output.stderr)?)),
         None => Err(ProvideError::Error(format!("Terminated by signal"))),
     }
 }

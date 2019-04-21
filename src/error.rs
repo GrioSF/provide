@@ -8,6 +8,7 @@ use std::error::Error;
 use std::fmt;
 use std::io;
 use std::str;
+use std::string;
 
 #[derive(Debug, PartialEq)]
 pub enum ProvideError {
@@ -78,6 +79,12 @@ impl From<base64::DecodeError> for ProvideError {
 impl From<str::Utf8Error> for ProvideError {
     fn from(err: str::Utf8Error) -> Self {
         ProvideError::UTF8Error(err)
+    }
+}
+
+impl From<string::FromUtf8Error> for ProvideError {
+    fn from(err: string::FromUtf8Error) -> Self {
+        ProvideError::UTF8Error(err.utf8_error())
     }
 }
 
