@@ -1,5 +1,6 @@
 use base64;
 use regex;
+use rusoto_core::RusotoError;
 use rusoto_core::region::ParseRegionError;
 use rusoto_ssm::GetParametersByPathError;
 use std::convert::From;
@@ -16,7 +17,7 @@ pub enum ProvideError {
     BadRegex(regex::Error),
     BadFormat(String),
     InvalidPathError(String),
-    GetParametersByPathError(GetParametersByPathError),
+    GetParametersByPathError(RusotoError<GetParametersByPathError>),
     ParseRegionError(ParseRegionError),
     IOError(io::ErrorKind, String),
     Base64Error(base64::DecodeError),
@@ -51,8 +52,8 @@ impl fmt::Display for ProvideError {
     }
 }
 
-impl From<GetParametersByPathError> for ProvideError {
-    fn from(err: GetParametersByPathError) -> Self {
+impl From<RusotoError<GetParametersByPathError>> for ProvideError {
+    fn from(err: RusotoError<GetParametersByPathError>) -> Self {
         ProvideError::GetParametersByPathError(err)
     }
 }
