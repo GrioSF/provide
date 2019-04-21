@@ -1,13 +1,13 @@
+use base64;
+use regex;
+use rusoto_core::region::ParseRegionError;
+use rusoto_ssm::GetParametersByPathError;
 use std::convert::From;
+use std::env;
 use std::error::Error;
 use std::fmt;
 use std::io;
 use std::str;
-use std::env;
-use regex;
-use rusoto_core::region::ParseRegionError;
-use rusoto_ssm::{GetParametersByPathError};
-use base64;
 
 #[derive(Debug, PartialEq)]
 pub enum ProvideError {
@@ -20,7 +20,7 @@ pub enum ProvideError {
     IOError(io::ErrorKind, String),
     Base64Error(base64::DecodeError),
     UTF8Error(str::Utf8Error),
-    EnvError(env::VarError)
+    EnvError(env::VarError),
 }
 
 impl Error for ProvideError {}
@@ -31,10 +31,18 @@ impl fmt::Display for ProvideError {
             ProvideError::Error(message) => f.write_fmt(format_args!("Error: {}", message)),
             ProvideError::BadRegex(err) => f.write_fmt(format_args!("BadRegex: {:?}", err)),
             ProvideError::BadFormat(message) => f.write_fmt(format_args!("BadFormat: {}", message)),
-            ProvideError::GetParametersByPathError(err) => f.write_fmt(format_args!("GetParametersByPathError: {}", err)),
-            ProvideError::InvalidPathError(message) => f.write_fmt(format_args!("InvalidPathError: {}", message)),
-            ProvideError::ParseRegionError(err) => f.write_fmt(format_args!("ParseRegionError: {}", err)),
-            ProvideError::IOError(kind, message) => f.write_fmt(format_args!("IOError: {:?} {}", kind, message)),
+            ProvideError::GetParametersByPathError(err) => {
+                f.write_fmt(format_args!("GetParametersByPathError: {}", err))
+            }
+            ProvideError::InvalidPathError(message) => {
+                f.write_fmt(format_args!("InvalidPathError: {}", message))
+            }
+            ProvideError::ParseRegionError(err) => {
+                f.write_fmt(format_args!("ParseRegionError: {}", err))
+            }
+            ProvideError::IOError(kind, message) => {
+                f.write_fmt(format_args!("IOError: {:?} {}", kind, message))
+            }
             ProvideError::Base64Error(err) => f.write_fmt(format_args!("Base64Error: {}", err)),
             ProvideError::UTF8Error(err) => f.write_fmt(format_args!("UTF8Error: {}", err)),
             ProvideError::EnvError(err) => f.write_fmt(format_args!("EnvError: {}", err)),
