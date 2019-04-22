@@ -111,7 +111,7 @@ pub fn read_pairs_from_file(
 }
 
 pub fn read_from_reader(
-    reader: Box<BufRead>,
+    reader: impl BufRead,
     use_base64: bool,
 ) -> Result<HashMap<String, String>, ProvideError> {
     let lines_iter = reader.lines().map(|line| match line {
@@ -154,9 +154,9 @@ fn parse_line(line: &str, use_base64: bool) -> Result<Option<Pair>, ProvideError
     Ok(Some((key.to_owned(), val.to_owned())))
 }
 
-fn with_file(path: PathBuf) -> Result<Box<BufRead>, ProvideError> {
+fn with_file(path: PathBuf) -> Result<impl BufRead, ProvideError> {
     let f: fs::File = fs::File::open(path)?;
-    let reader: Box<BufRead> = Box::new(BufReader::new(f));
+    let reader = BufReader::new(f);
     Ok(reader)
 }
 
@@ -280,7 +280,7 @@ pub fn merge_with_command(
     &command.envs(vars);
     let output = command.output()?;
     match output.status.code() {
-        Some(0) => read_from_reader(Box::new(BufReader::new(Cursor::new(output.stdout))), true),
+        Some(0) => read_from_reader(BufReader::new(Cursor::new(output.stdout)), true),
         Some(_) => Err(ProvideError::Error(String::from_utf8(output.stderr)?)),
         None => Err(ProvideError::Error(format!("Terminated by signal"))),
     }
@@ -359,7 +359,7 @@ mod tests {
         let pair2 = encode_pair(("baz".to_owned(), "qux".to_owned()), false);
         let source = format!("{}\n{}\n", pair1, pair2).into_bytes();
         let result =
-            read_from_reader(Box::new(BufReader::new(Cursor::new(source))), false).unwrap();
+            read_from_reader(BufReader::new(Cursor::new(source)), false).unwrap();
         let expected: HashMap<String, String> = vec![
             ("foo".to_owned(), "bar".to_owned()),
             ("baz".to_owned(), "qux".to_owned()),
@@ -374,7 +374,7 @@ mod tests {
         let pair1 = encode_pair(("foo".to_owned(), "bar".to_owned()), true);
         let pair2 = encode_pair(("baz".to_owned(), "qux".to_owned()), true);
         let source = format!("{}\n{}\n", pair1, pair2).into_bytes();
-        let result = read_from_reader(Box::new(BufReader::new(Cursor::new(source))), true).unwrap();
+        let result = read_from_reader(BufReader::new(Cursor::new(source)), true).unwrap();
         let expected: HashMap<String, String> = vec![
             ("foo".to_owned(), "bar".to_owned()),
             ("baz".to_owned(), "qux".to_owned()),
@@ -389,7 +389,7 @@ mod tests {
         let pair1 = encode_pair(("foo".to_owned(), "bar".to_owned()), true);
         let pair2 = encode_pair(("baz".to_owned(), "qux".to_owned()), true);
         let source = format!("{}\n\r\n\n{}\n\n", pair1, pair2).into_bytes();
-        let result = read_from_reader(Box::new(BufReader::new(Cursor::new(source))), true).unwrap();
+        let result = read_from_reader(BufReader::new(Cursor::new(source)), true).unwrap();
         let expected: HashMap<String, String> = vec![
             ("foo".to_owned(), "bar".to_owned()),
             ("baz".to_owned(), "qux".to_owned()),
