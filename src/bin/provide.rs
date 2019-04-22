@@ -218,17 +218,17 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
     };
 
     Ok(Options {
-        mode,
         app,
-        target,
-        path,
-        region,
-        includes,
-        format_config,
-        merges,
-        run_config,
         env_vars,
         env_vars_base64,
+        format_config,
+        includes,
+        merges,
+        mode,
+        path,
+        region,
+        run_config,
+        target,
     })
 }
 
