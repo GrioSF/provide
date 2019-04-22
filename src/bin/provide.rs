@@ -11,7 +11,7 @@ fn main() -> Result<(), ProvideError> {
     let matches = app().get_matches();
     let options = options_from_matches(matches)?;
     let format_config = options.format_config.clone();
-    let maybe_run_config = options.run.clone();
+    let maybe_run_config = options.run_config.clone();
     let vars: HashMap<String, String> = api::get_parameters(options)?;
     match maybe_run_config {
         Some(run_config) => Ok(api::run(run_config, vars)?),
@@ -206,7 +206,7 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
         None => None,
     };
 
-    let run = match cmds {
+    let run_config = match cmds {
         Some(vars) => match vars.split_at(1) {
             ([head], tail) => Some(RunConfig {
                 cmd: head.to_owned(),
@@ -226,7 +226,7 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
         includes,
         format_config,
         merges,
-        run,
+        run_config,
         env_vars,
         env_vars_base64,
     })
@@ -253,7 +253,7 @@ mod tests {
             options.unwrap(),
             Options {
                 includes: Some(vec!["include_file_1".to_owned()]),
-                run: Some(RunConfig {
+                run_config: Some(RunConfig {
                     cmd: "cmd".to_owned(),
                     ..RunConfig::default()
                 }),
@@ -270,7 +270,41 @@ mod tests {
             options.unwrap(),
             Options {
                 merges: Some(vec!["merge_file_1".to_owned()]),
-                run: Some(RunConfig {
+                run_config: Some(RunConfig {
+                    cmd: "cmd".to_owned(),
+                    ..RunConfig::default()
+                }),
+                ..Options::default()
+            }
+        );
+    }
+
+    #[test]
+    fn test_env_vars_only_accepts_one_value() {
+        let m = app().get_matches_from(vec!["provide", "--env-var", "FOO=bar", "cmd"]);
+        let options = options_from_matches(m);
+        assert_eq!(
+            options.unwrap(),
+            Options {
+                env_vars: Some(vec!["FOO=bar".to_owned()]),
+                run_config: Some(RunConfig {
+                    cmd: "cmd".to_owned(),
+                    ..RunConfig::default()
+                }),
+                ..Options::default()
+            }
+        );
+    }
+
+    #[test]
+    fn test_env_vars_base64_only_accepts_one_value() {
+        let m = app().get_matches_from(vec!["provide", "--env-var-base64", "ABCDEF", "cmd"]);
+        let options = options_from_matches(m);
+        assert_eq!(
+            options.unwrap(),
+            Options {
+                env_vars_base64: Some(vec!["ABCDEF".to_owned()]),
+                run_config: Some(RunConfig {
                     cmd: "cmd".to_owned(),
                     ..RunConfig::default()
                 }),

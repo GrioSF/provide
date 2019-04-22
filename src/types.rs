@@ -18,7 +18,7 @@ pub struct Options {
     pub mode: Option<Mode>,
     pub path: Option<String>,
     pub region: Region,
-    pub run: Option<RunConfig>,
+    pub run_config: Option<RunConfig>,
     pub target: Option<String>,
 }
 

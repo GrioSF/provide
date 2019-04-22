@@ -1,7 +1,7 @@
 use base64;
 use regex;
-use rusoto_core::RusotoError;
 use rusoto_core::region::ParseRegionError;
+use rusoto_core::RusotoError;
 use rusoto_ssm::GetParametersByPathError;
 use std::convert::From;
 use std::env;
