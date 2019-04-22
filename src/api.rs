@@ -20,7 +20,7 @@ pub fn get_parameters(options: Options) -> Result<HashMap<String, String>, Provi
                 path: options.path.unwrap(),
                 region: options.region,
                 next_token: None,
-                acc: Box::new(Vec::<Parameter>::new()),
+                acc: Vec::<Parameter>::new(),
             })?;
             let params_map = params_as_hash_map(aws_parameters)?;
             map.extend(params_map);
@@ -64,7 +64,7 @@ pub fn get_parameters(options: Options) -> Result<HashMap<String, String>, Provi
     Ok(map)
 }
 
-fn get_parameters_with_acc(mut get_config: GetConfig) -> Result<Box<Vec<Parameter>>, ProvideError> {
+fn get_parameters_with_acc(mut get_config: GetConfig) -> Result<Vec<Parameter>, ProvideError> {
     let request = GetParametersByPathRequest {
         path: get_config.path.clone(),
         next_token: get_config.next_token,
@@ -161,7 +161,7 @@ fn with_file(path: PathBuf) -> Result<Box<BufRead>, ProvideError> {
 }
 
 pub fn params_as_hash_map(
-    params: Box<Vec<Parameter>>,
+    params: Vec<Parameter>,
 ) -> Result<HashMap<String, String>, ProvideError> {
     params
         .into_iter()

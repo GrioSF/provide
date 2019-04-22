@@ -26,7 +26,7 @@ pub struct GetConfig {
     pub path: String,
     pub region: Region,
     pub next_token: Option<String>,
-    pub acc: Box<Vec<Parameter>>,
+    pub acc: Vec<Parameter>,
 }
 
 pub type Pair = (String, String);
