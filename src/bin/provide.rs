@@ -1,7 +1,7 @@
-use clap::{App, AppSettings, Arg, ArgGroup, ArgMatches};
-use provider::api;
-use provider::error::ProvideError;
-use provider::types::*;
+use clap::{App, AppSettings, Arg, ArgGroup, ArgMatches, crate_version};
+use provide::api;
+use provide::error::ProvideError;
+use provide::types::*;
 use rusoto_core::Region;
 use std::collections::HashMap;
 use std::env;
@@ -20,7 +20,8 @@ fn main() -> Result<(), ProvideError> {
 }
 
 fn app<'a, 'b>() -> App<'a, 'b> {
-    App::new("provide")
+        App::new("provide")
+        .version(crate_version!())
         .settings(&[AppSettings::TrailingVarArg])
         .about("Provides environment variables from AWS Parameter Store")
 

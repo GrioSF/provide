@@ -2,7 +2,7 @@ use crate::error::ProvideError;
 use crate::types::*;
 use base64;
 use regex::Regex;
-use rusoto_ssm::*;
+use rusoto_ssm::{Parameter, GetParametersByPathRequest, SsmClient, Ssm};
 use std::collections::HashMap;
 use std::env;
 use std::fs;

@@ -66,8 +66,7 @@ impl From<ParseRegionError> for ProvideError {
 
 impl From<io::Error> for ProvideError {
     fn from(err: io::Error) -> Self {
-        let message = err.description().to_owned();
-        ProvideError::IOError(err.kind(), message)
+        ProvideError::IOError(err.kind(), err.to_string())
     }
 }
 
