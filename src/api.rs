@@ -11,6 +11,7 @@ use std::path::PathBuf;
 use std::path::MAIN_SEPARATOR;
 use std::process::{Command, Stdio};
 use std::str;
+use tokio;
 
 pub fn get_parameters(options: Options) -> Result<HashMap<String, String>, ProvideError> {
     let mut map = HashMap::<String, String>::new();
@@ -74,10 +75,14 @@ fn get_parameters_with_acc(mut get_config: GetConfig) -> Result<Vec<Parameter>, 
         max_results: None,
     };
     let ssm_client = SsmClient::new(get_config.region.clone());
-    match ssm_client.get_parameters_by_path(request).sync() {
-        Ok(output) => {
-            get_config.acc.append(&mut output.parameters.unwrap());
-            match output.next_token {
+    let fut = ssm_client.get_parameters_by_path(request);
+    let response = tokio::runtime::Runtime::new()
+        .unwrap()
+        .block_on(fut)?;
+    match response.parameters {
+        Some(mut output) => {
+            get_config.acc.append(&mut output);
+            match response.next_token {
                 Some(token) => get_parameters_with_acc(GetConfig {
                     path: get_config.path,
                     region: get_config.region,
@@ -87,7 +92,7 @@ fn get_parameters_with_acc(mut get_config: GetConfig) -> Result<Vec<Parameter>, 
                 None => Ok(get_config.acc),
             }
         }
-        Err(err) => Err(From::from(err)),
+        None => Ok(vec![]),
     }
 }
 
