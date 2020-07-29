@@ -1,0 +1,107 @@
+version: 2.1
+jobs:
+  test:
+    docker:
+      - image: rust:latest
+    steps:
+      - checkout
+      - run:
+          name: Test
+          command: cargo test
+
+  build-linux:
+    docker:
+      - image: rust:latest
+    steps:
+      - checkout
+      - run: cargo build --release
+      - run: mv target/release/provide .
+      - run: 
+          name: "Create tgz"
+          command: |
+            mkdir -p /tmp/work
+            VERSION=$(./extract_version.sh)
+            tar -czf "/tmp/work/provide-$VERSION-x86_64-unknown-linux-gnu.tar.gz" provide
+      - persist_to_workspace:
+          root: /tmp/work
+          paths:
+            - '*.tar.gz'
+
+  build-mac:
+    macos:
+      xcode: "11.3.0"
+    steps:
+      - checkout
+      - attach_workspace:
+          at: /tmp/work
+      - run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://static.rust-lang.org/rustup/dist/x86_64-apple-darwin/rustup-init > rustup-init
+          chmod +x rustup-init
+          ./rustup-init -q -y
+      - run: cargo build --release
+      - run: mv target/release/provide .
+      - run:
+          name: "Create tgz"
+          command: |
+            mkdir -p /tmp/work
+            VERSION=$(./extract_version.sh)
+            tar -czf "/tmp/work/provide-$VERSION-x86_64-apple-darwin.tar.gz" provide
+      - persist_to_workspace:
+          root: /tmp/work
+          paths:
+            - '*.tar.gz'
+
+  release:
+    docker:
+      - image: circleci/golang:1.14
+    steps:
+      - checkout
+      - attach_workspace:
+          at: /tmp/work
+      - run:
+          name: "Publish Release on GitHub"
+          command: |
+            VERSION=$(./extract_version.sh)
+            go get github.com/tcnksm/ghr
+            ghr -t $GITHUB_TOKEN \
+              -u $CIRCLE_PROJECT_USERNAME \
+              -r $CIRCLE_PROJECT_REPONAME \
+              -c $CIRCLE_SHA1 \
+              -draft \
+              -delete "v$VERSION" /tmp/work/
+
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - test:
+          filters:
+            tags:
+              only: /^v.*/
+      - build-linux:
+          requires:
+            - test
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^v.*/
+  
+      - build-mac:
+          requires:
+            - test
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^v.*/
+  
+      - release:
+          requires:
+            - build-linux
+            - build-mac
+          filters:
+            branches:
+              ignore: /.*/
+            tags:
+              only: /^v.*/
