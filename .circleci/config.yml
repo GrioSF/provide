@@ -14,14 +14,22 @@ jobs:
       - image: rust:latest
     steps:
       - checkout
-      - run: cargo build --release
-      - run: mv target/release/provide .
       - run: 
-          name: "Create tgz"
+          name: "Install musl target"
+          command: |
+            rustup target add x86_64-unknown-linux-musl
+            apt update && apt install -y musl-tools
+      - run: 
+          name: "Build x86_64-unknown-linux-musl release binary"
+          command: |
+            cargo build --target x86_64-unknown-linux-musl --release
+            mv target/x86_64-unknown-linux-musl/release/provide .
+      - run: 
+          name: "Compress and persist binary"
           command: |
             mkdir -p /tmp/work
             VERSION=$(./extract_version.sh)
-            tar -czf "/tmp/work/provide-$VERSION-x86_64-unknown-linux-gnu.tar.gz" provide
+            tar -czf "/tmp/work/provide-$VERSION-x86_64-unknown-linux-musl.tar.gz" provide
       - persist_to_workspace:
           root: /tmp/work
           paths:
@@ -34,14 +42,19 @@ jobs:
       - checkout
       - attach_workspace:
           at: /tmp/work
-      - run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://static.rust-lang.org/rustup/dist/x86_64-apple-darwin/rustup-init > rustup-init
-          chmod +x rustup-init
-          ./rustup-init -q -y
-      - run: cargo build --release
-      - run: mv target/release/provide .
       - run:
-          name: "Create tgz"
+          name: "Install rust"
+          command: |
+            curl --proto '=https' --tlsv1.2 -sSf https://static.rust-lang.org/rustup/dist/x86_64-apple-darwin/rustup-init > rustup-init
+            chmod +x rustup-init
+            ./rustup-init -q -y
+      - run: 
+          name: "Build x86_64-apple-darwin release binary"
+          command: |
+            cargo build --release
+            mv target/release/provide .
+      - run:
+          name: "Compress and persist binary"
           command: |
             mkdir -p /tmp/work
             VERSION=$(./extract_version.sh)
