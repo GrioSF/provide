@@ -1,32 +1,20 @@
-A command-line tool for defining and retrieving variables from AWS Parameter Store.
+A command-line tool for defining and retrieving variables from AWS Parameter Store, so you may centrally manage and provide environment variables for devops purposes.
 
-# Use Case
-Centrally manage and provide environment variables for devops purposes.
+# Installation
+Download the binary for your platform from the release page.
 
-# Getting Started
-TBD
+# Usage
 
-## Example usage
-TBD
+Given you have setup variables in AWS Parameter Store with the following root path
+`/myapp/staging` and you have an executable `myexecutable`, `provide` will retrieve your variables and provide them to your executable in a sub-process:
 
-# Setting up AWS Parameter Store
-TBD
-
-## Paths
-TBD
-
-# Populating your variables
-TBD
-
-## Use `provide` to setup
-TBD
-
-## Use `bash` to setup
-TBD
+```
+provide --get -a myapp -t staging ./myexecutable
+```
 
 # AWS Region Resolution
 
-The underlying lib for this tool appears to emulate the process described at https://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/java-dg-region-selection.html with some differences.
+The underlying lib for this tool, rusoto, appears to emulate the process described at https://docs.aws.amazon.com/sdk-for-java/v1/developer-guide/java-dg-region-selection.html with some differences.
 
 In `provide`, resolution resolves in this order of priority:
 
@@ -51,24 +39,4 @@ Modify `~/.aws/config`
 [profile my-profile]
 cli_follow_urlparam = false
 region = us-west-1
-```
-
-# Working with the code
-
-Clone this repo and run all commands from the root directory.
-
-## Install the Rust toolchain
-TBD
-
-## Running in development mode
-
-```
-cargo run --bin provide -- get --profile my-profile /app/env
-```
-
-## Building release and running it
-
-```
-cargo build --release
-./target/release/provide get --profile my-profile /app/env
 ```
