@@ -2,18 +2,19 @@ use crate::error::ProvideError;
 use crate::types::*;
 use base64;
 use regex::Regex;
-use rusoto_ssm::{Parameter, GetParametersByPathRequest, SsmClient, Ssm};
+use rusoto_ssm::{GetParametersByPathRequest, Parameter, Ssm, SsmClient};
 use std::collections::HashMap;
 use std::env;
 use std::fs;
+use std::future::Future;
 use std::io::{BufRead, BufReader, Cursor};
 use std::path::PathBuf;
 use std::path::MAIN_SEPARATOR;
+use std::pin::Pin;
 use std::process::{Command, Stdio};
 use std::str;
-use tokio;
 
-pub fn get_parameters(options: Options) -> Result<HashMap<String, String>, ProvideError> {
+pub async fn get_parameters(options: Options) -> Result<HashMap<String, String>, ProvideError> {
     let mut map = HashMap::<String, String>::new();
     match options.mode {
         Some(Mode::GET) => {
@@ -22,7 +23,8 @@ pub fn get_parameters(options: Options) -> Result<HashMap<String, String>, Provi
                 region: options.region,
                 next_token: None,
                 acc: Vec::<Parameter>::new(),
-            })?;
+            })
+            .await?;
             let params_map = params_as_hash_map(aws_parameters)?;
             map.extend(params_map);
         }
@@ -65,35 +67,40 @@ pub fn get_parameters(options: Options) -> Result<HashMap<String, String>, Provi
     Ok(map)
 }
 
-fn get_parameters_with_acc(mut get_config: GetConfig) -> Result<Vec<Parameter>, ProvideError> {
-    let request = GetParametersByPathRequest {
-        path: get_config.path.clone(),
-        next_token: get_config.next_token,
-        recursive: Some(false),
-        with_decryption: Some(false),
-        parameter_filters: None,
-        max_results: None,
-    };
-    let ssm_client = SsmClient::new(get_config.region.clone());
-    let fut = ssm_client.get_parameters_by_path(request);
-    let response = tokio::runtime::Runtime::new()
-        .unwrap()
-        .block_on(fut)?;
-    match response.parameters {
-        Some(mut output) => {
-            get_config.acc.append(&mut output);
-            match response.next_token {
-                Some(token) => get_parameters_with_acc(GetConfig {
-                    path: get_config.path,
-                    region: get_config.region,
-                    next_token: Some(token),
-                    acc: get_config.acc,
-                }),
-                None => Ok(get_config.acc),
+fn get_parameters_with_acc(
+    mut get_config: GetConfig,
+) -> Pin<Box<dyn Future<Output = Result<Vec<Parameter>, ProvideError>>>> {
+    let fut = async move {
+        let request = GetParametersByPathRequest {
+            path: get_config.path.clone(),
+            next_token: get_config.next_token,
+            recursive: Some(false),
+            with_decryption: Some(false),
+            parameter_filters: None,
+            max_results: None,
+        };
+        let ssm_client = SsmClient::new(get_config.region.clone());
+        let response = ssm_client.get_parameters_by_path(request).await?;
+        match response.parameters {
+            Some(mut output) => {
+                get_config.acc.append(&mut output);
+                match response.next_token {
+                    Some(token) => {
+                        get_parameters_with_acc(GetConfig {
+                            path: get_config.path,
+                            region: get_config.region,
+                            next_token: Some(token),
+                            acc: get_config.acc,
+                        })
+                        .await
+                    }
+                    None => Ok(get_config.acc),
+                }
             }
+            None => Ok(vec![]),
         }
-        None => Ok(vec![]),
-    }
+    };
+    Box::pin(fut)
 }
 
 pub fn read_pairs_from_files(
@@ -127,8 +134,7 @@ pub fn read_from_reader(
     match lines {
         Ok(list) => Ok(list
             .into_iter()
-            .filter(|pair| pair.is_some())
-            .map(|p| p.unwrap())
+            .filter_map(|p| p)
             .collect()),
         Err(err) => Err(err),
     }
@@ -165,9 +171,7 @@ fn with_file(path: PathBuf) -> Result<impl BufRead, ProvideError> {
     Ok(reader)
 }
 
-pub fn params_as_hash_map(
-    params: Vec<Parameter>,
-) -> Result<HashMap<String, String>, ProvideError> {
+pub fn params_as_hash_map(params: Vec<Parameter>) -> Result<HashMap<String, String>, ProvideError> {
     params
         .into_iter()
         .map(|param| {
@@ -248,8 +252,7 @@ pub fn merge_with_given(
     match lines {
         Ok(list) => Ok(list
             .into_iter()
-            .filter(|pair| pair.is_some())
-            .map(|p| p.unwrap())
+            .filter_map(|p| p)
             .collect()),
         Err(err) => Err(err),
     }
@@ -363,8 +366,7 @@ mod tests {
         let pair1 = encode_pair(("foo".to_owned(), "bar".to_owned()), false);
         let pair2 = encode_pair(("baz".to_owned(), "qux".to_owned()), false);
         let source = format!("{}\n{}\n", pair1, pair2).into_bytes();
-        let result =
-            read_from_reader(BufReader::new(Cursor::new(source)), false).unwrap();
+        let result = read_from_reader(BufReader::new(Cursor::new(source)), false).unwrap();
         let expected: HashMap<String, String> = vec![
             ("foo".to_owned(), "bar".to_owned()),
             ("baz".to_owned(), "qux".to_owned()),
@@ -403,5 +405,4 @@ mod tests {
         .collect();
         assert_eq!(result, expected);
     }
-
 }
