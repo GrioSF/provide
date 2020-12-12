@@ -1,4 +1,4 @@
-use clap::{App, AppSettings, Arg, ArgGroup, ArgMatches, crate_version};
+use clap::{crate_version, App, AppSettings, Arg, ArgGroup, ArgMatches};
 use provide::api;
 use provide::error::ProvideError;
 use provide::types::*;
@@ -6,13 +6,15 @@ use rusoto_core::Region;
 use std::collections::HashMap;
 use std::env;
 use std::str::FromStr;
+use tokio;
 
-fn main() -> Result<(), ProvideError> {
+#[tokio::main]
+async fn main() -> Result<(), ProvideError> {
     let matches = app().get_matches();
     let options = options_from_matches(matches)?;
     let format_config = options.format_config.clone();
     let maybe_run_config = options.run_config.clone();
-    let vars: HashMap<String, String> = api::get_parameters(options)?;
+    let vars: HashMap<String, String> = api::get_parameters(options).await?;
     match maybe_run_config {
         Some(run_config) => Ok(api::run(run_config, vars)?),
         None => Ok(display(format_config, vars)),
@@ -20,7 +22,7 @@ fn main() -> Result<(), ProvideError> {
 }
 
 fn app<'a, 'b>() -> App<'a, 'b> {
-        App::new("provide")
+    App::new("provide")
         .version(crate_version!())
         .settings(&[AppSettings::TrailingVarArg])
         .about("Provides environment variables from AWS Parameter Store")
