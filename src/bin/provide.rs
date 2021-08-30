@@ -2,19 +2,17 @@ use clap::{crate_version, App, AppSettings, Arg, ArgGroup, ArgMatches};
 use provide::api;
 use provide::error::ProvideError;
 use provide::types::*;
-use rusoto_core::Region;
 use std::collections::HashMap;
 use std::env;
-use std::str::FromStr;
 use tokio;
 
 #[tokio::main]
-async fn main() -> Result<(), ProvideError> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let matches = app().get_matches();
     let options = options_from_matches(matches)?;
     let format_config = options.format_config.clone();
     let maybe_run_config = options.run_config.clone();
-    let vars: HashMap<String, String> = api::get_parameters(options).await?;
+    let vars: HashMap<String, String> = api::process_parameters(options).await?;
     match maybe_run_config {
         Some(run_config) => Ok(api::run(run_config, vars)?),
         None => Ok(display(format_config, vars)),
@@ -71,7 +69,9 @@ fn app<'a, 'b>() -> App<'a, 'b> {
             .long("region")
             .takes_value(true)
             .value_name("REGION")
-            .help("Specify region (overrides env, profile)"))
+            .env("AWS_REGION")
+            .default_value("us-west-1")
+            .help("Specify region"))
 
         .arg(Arg::with_name("include")
             .required(false)
@@ -135,7 +135,7 @@ fn app<'a, 'b>() -> App<'a, 'b> {
             .help("Provide vars to given command"))
 }
 
-fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
+fn options_from_matches(matches: ArgMatches) -> Result<ProcessParametersOptions, ProvideError> {
     let has_get = matches.is_present("get");
     let has_set = matches.is_present("set");
 
@@ -157,6 +157,10 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
     };
 
     let region_name = matches.value_of("region");
+    if let Some(name) = region_name {
+        // Ensure AWS_REGION is the same
+        env::set_var("AWS_REGION", name);
+    }
 
     let includes: Option<Vec<String>> = match matches.values_of("include") {
         Some(values) => Some(values.map(|val| String::from(val)).collect()),
@@ -170,15 +174,8 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
 
     let profile = matches.value_of("profile");
     if profile.is_some() {
-        // The only way I've found to have rusoto honor given profile since ProfileProvider
-        // ignores it. Note this is only set for the current process.
         env::set_var("AWS_PROFILE", profile.unwrap());
     }
-
-    let region = match region_name {
-        Some(name) => Region::from_str(name)?,
-        None => Region::default(), // will return a region defined in the env, profile, or default see method doc
-    };
 
     let format = match matches.value_of("format") {
         Some("export") => Ok(Format::EXPORT),
@@ -220,7 +217,7 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
         None => None,
     };
 
-    Ok(Options {
+    Ok(ProcessParametersOptions {
         app,
         env_vars,
         env_vars_base64,
@@ -229,7 +226,6 @@ fn options_from_matches(matches: ArgMatches) -> Result<Options, ProvideError> {
         merges,
         mode,
         path,
-        region,
         run_config,
         target,
     })
@@ -254,13 +250,13 @@ mod tests {
         let options = options_from_matches(m);
         assert_eq!(
             options.unwrap(),
-            Options {
+            ProcessParametersOptions {
                 includes: Some(vec!["include_file_1".to_owned()]),
                 run_config: Some(RunConfig {
                     cmd: "cmd".to_owned(),
                     ..RunConfig::default()
                 }),
-                ..Options::default()
+                ..ProcessParametersOptions::default()
             }
         );
     }
@@ -271,13 +267,13 @@ mod tests {
         let options = options_from_matches(m);
         assert_eq!(
             options.unwrap(),
-            Options {
+            ProcessParametersOptions {
                 merges: Some(vec!["merge_file_1".to_owned()]),
                 run_config: Some(RunConfig {
                     cmd: "cmd".to_owned(),
                     ..RunConfig::default()
                 }),
-                ..Options::default()
+                ..ProcessParametersOptions::default()
             }
         );
     }
@@ -288,13 +284,13 @@ mod tests {
         let options = options_from_matches(m);
         assert_eq!(
             options.unwrap(),
-            Options {
+            ProcessParametersOptions {
                 env_vars: Some(vec!["FOO=bar".to_owned()]),
                 run_config: Some(RunConfig {
                     cmd: "cmd".to_owned(),
                     ..RunConfig::default()
                 }),
-                ..Options::default()
+                ..ProcessParametersOptions::default()
             }
         );
     }
@@ -305,13 +301,13 @@ mod tests {
         let options = options_from_matches(m);
         assert_eq!(
             options.unwrap(),
-            Options {
+            ProcessParametersOptions {
                 env_vars_base64: Some(vec!["ABCDEF".to_owned()]),
                 run_config: Some(RunConfig {
                     cmd: "cmd".to_owned(),
                     ..RunConfig::default()
                 }),
-                ..Options::default()
+                ..ProcessParametersOptions::default()
             }
         );
     }
