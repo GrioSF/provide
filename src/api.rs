@@ -1,8 +1,10 @@
 use crate::error::ProvideError;
 use crate::types::*;
+use aws_sdk_ssm::Config;
 use base64;
 use regex::Regex;
-use rusoto_ssm::{GetParametersByPathRequest, Parameter, Ssm, SsmClient};
+use aws_sdk_ssm::model::Parameter;
+use aws_sdk_ssm::Client;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
@@ -14,17 +16,20 @@ use std::pin::Pin;
 use std::process::{Command, Stdio};
 use std::str;
 
-pub async fn get_parameters(options: Options) -> Result<HashMap<String, String>, ProvideError> {
+pub async fn process_parameters(options: ProcessParametersOptions) -> Result<HashMap<String, String>, Box<dyn std::error::Error>> {
     let mut map = HashMap::<String, String>::new();
     match options.mode {
         Some(Mode::GET) => {
-            let aws_parameters = get_parameters_with_acc(GetConfig {
+            let credentials_provider = aws_auth_providers::default_provider();
+            let config = Config::builder().credentials_provider(credentials_provider).build();
+            let client = Client::from_conf(config);
+            let options = GetAWSParametersOptions {
                 path: options.path.unwrap(),
-                region: options.region,
                 next_token: None,
                 acc: Vec::<Parameter>::new(),
-            })
-            .await?;
+                client
+            };
+            let aws_parameters = get_aws_parameters(options).await?;
             let params_map = params_as_hash_map(aws_parameters)?;
             map.extend(params_map);
         }
@@ -67,34 +72,30 @@ pub async fn get_parameters(options: Options) -> Result<HashMap<String, String>,
     Ok(map)
 }
 
-fn get_parameters_with_acc(
-    mut get_config: GetConfig,
-) -> Pin<Box<dyn Future<Output = Result<Vec<Parameter>, ProvideError>>>> {
+fn get_aws_parameters(
+    mut options: GetAWSParametersOptions,
+) -> Pin<Box<dyn Future<Output = Result<Vec<Parameter>, Box<dyn std::error::Error>>>>> {
     let fut = async move {
-        let request = GetParametersByPathRequest {
-            path: get_config.path.clone(),
-            next_token: get_config.next_token,
-            recursive: Some(false),
-            with_decryption: Some(false),
-            parameter_filters: None,
-            max_results: None,
-        };
-        let ssm_client = SsmClient::new(get_config.region.clone());
-        let response = ssm_client.get_parameters_by_path(request).await?;
+        let builder = options.client.get_parameters_by_path()
+            .max_results(10) // 10 is max allowed
+            .path(options.path.clone())
+            .recursive(false)
+            .with_decryption(false)
+            .set_next_token(options.next_token);
+        let response = builder.send().await?;
         match response.parameters {
             Some(mut output) => {
-                get_config.acc.append(&mut output);
+                options.acc.append(&mut output);
                 match response.next_token {
                     Some(token) => {
-                        get_parameters_with_acc(GetConfig {
-                            path: get_config.path,
-                            region: get_config.region,
+                        get_aws_parameters(GetAWSParametersOptions {
+                            path: options.path,
                             next_token: Some(token),
-                            acc: get_config.acc,
-                        })
-                        .await
+                            acc: options.acc,
+                            client: options.client
+                        }).await
                     }
-                    None => Ok(get_config.acc),
+                    None => Ok(options.acc),
                 }
             }
             None => Ok(vec![]),

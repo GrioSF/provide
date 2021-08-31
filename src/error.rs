@@ -1,8 +1,5 @@
 use base64;
 use regex;
-use rusoto_core::region::ParseRegionError;
-use rusoto_core::RusotoError;
-use rusoto_ssm::GetParametersByPathError;
 use std::convert::From;
 use std::env;
 use std::error::Error;
@@ -17,8 +14,6 @@ pub enum ProvideError {
     BadRegex(regex::Error),
     BadFormat(String),
     InvalidPathError(String),
-    GetParametersByPathError(RusotoError<GetParametersByPathError>),
-    ParseRegionError(ParseRegionError),
     IOError(io::ErrorKind, String),
     Base64Error(base64::DecodeError),
     UTF8Error(str::Utf8Error),
@@ -33,14 +28,8 @@ impl fmt::Display for ProvideError {
             ProvideError::Error(message) => f.write_fmt(format_args!("Error: {}", message)),
             ProvideError::BadRegex(err) => f.write_fmt(format_args!("BadRegex: {:?}", err)),
             ProvideError::BadFormat(message) => f.write_fmt(format_args!("BadFormat: {}", message)),
-            ProvideError::GetParametersByPathError(err) => {
-                f.write_fmt(format_args!("GetParametersByPathError: {}", err))
-            }
             ProvideError::InvalidPathError(message) => {
                 f.write_fmt(format_args!("InvalidPathError: {}", message))
-            }
-            ProvideError::ParseRegionError(err) => {
-                f.write_fmt(format_args!("ParseRegionError: {}", err))
             }
             ProvideError::IOError(kind, message) => {
                 f.write_fmt(format_args!("IOError: {:?} {}", kind, message))
@@ -49,18 +38,6 @@ impl fmt::Display for ProvideError {
             ProvideError::UTF8Error(err) => f.write_fmt(format_args!("UTF8Error: {}", err)),
             ProvideError::EnvError(err) => f.write_fmt(format_args!("EnvError: {}", err)),
         }
-    }
-}
-
-impl From<RusotoError<GetParametersByPathError>> for ProvideError {
-    fn from(err: RusotoError<GetParametersByPathError>) -> Self {
-        ProvideError::GetParametersByPathError(err)
-    }
-}
-
-impl From<ParseRegionError> for ProvideError {
-    fn from(err: ParseRegionError) -> Self {
-        ProvideError::ParseRegionError(err)
     }
 }
 

@@ -1,5 +1,4 @@
-use rusoto_core::Region;
-use rusoto_ssm::Parameter;
+use aws_sdk_ssm::{Client, model::Parameter};
 
 #[derive(Debug, PartialEq)]
 pub enum Mode {
@@ -8,7 +7,7 @@ pub enum Mode {
 }
 
 #[derive(Debug, PartialEq, Default)]
-pub struct Options {
+pub struct ProcessParametersOptions {
     pub app: Option<String>,
     pub env_vars: Option<Vec<String>>,
     pub env_vars_base64: Option<Vec<String>>,
@@ -17,16 +16,15 @@ pub struct Options {
     pub merges: Option<Vec<String>>,
     pub mode: Option<Mode>,
     pub path: Option<String>,
-    pub region: Region,
     pub run_config: Option<RunConfig>,
     pub target: Option<String>,
 }
 
-pub struct GetConfig {
+pub struct GetAWSParametersOptions {
     pub path: String,
-    pub region: Region,
     pub next_token: Option<String>,
     pub acc: Vec<Parameter>,
+    pub client: Client
 }
 
 pub type Pair = (String, String);
