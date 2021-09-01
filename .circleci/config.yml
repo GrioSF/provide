@@ -48,17 +48,21 @@ jobs:
             curl --proto '=https' --tlsv1.2 -sSf https://static.rust-lang.org/rustup/dist/x86_64-apple-darwin/rustup-init > rustup-init
             chmod +x rustup-init
             ./rustup-init -q -y
+            rustup target add aarch64-apple-darwin
       - run: 
-          name: "Build x86_64-apple-darwin release binary"
+          name: "Build darwin release binaries"
           command: |
-            cargo build --release
-            mv target/release/provide .
+            cargo build --release --target aarch64-apple-darwin
+            cargo build --release --target x86_64-apple-darwin
       - run:
           name: "Compress and persist binary"
           command: |
             mkdir -p /tmp/work
             VERSION=$(./extract_version.sh)
-            tar -czf "/tmp/work/provide-$VERSION-x86_64-apple-darwin.tar.gz" provide
+            tar -czf "/tmp/work/provide-$VERSION-aarch64-apple-darwin.tar.gz" \
+              -C target/aarch64-apple-darwin/release provide
+            tar -czf "/tmp/work/provide-$VERSION-x86_64-apple-darwin.tar.gz" \
+              -C target/x86_64-apple-darwin/release provide
       - persist_to_workspace:
           root: /tmp/work
           paths:
