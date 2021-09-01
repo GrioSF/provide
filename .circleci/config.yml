@@ -47,8 +47,7 @@ jobs:
           command: |
             curl --proto '=https' --tlsv1.2 -sSf https://static.rust-lang.org/rustup/dist/x86_64-apple-darwin/rustup-init > rustup-init
             chmod +x rustup-init
-            ./rustup-init -q -y
-            rustup target add aarch64-apple-darwin
+            ./rustup-init -q -y -t aarch64-apple-darwin
       - run: 
           name: "Build darwin release binaries"
           command: |
