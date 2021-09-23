@@ -6,12 +6,12 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-aws-types = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.17-alpha",package = "aws-types" }
-aws-config = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.17-alpha", package = "aws-config" }
-aws-sdk-ssm = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.17-alpha", package = "aws-sdk-ssm" }
-regex = "1.4.2"
-clap = "2.33.1"
-dirs = "3.0.1"
+aws-types = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.18-alpha",package = "aws-types" }
+aws-config = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.18-alpha", package = "aws-config" }
+aws-sdk-ssm = { git = "https://github.com/awslabs/aws-sdk-rust", tag = "v0.0.18-alpha", package = "aws-sdk-ssm" }
+regex = "1.5.4"
+clap = "2.33.3"
+dirs = "4.0.0"
 lazy_static = "1.4.0"
 base64 = "0.13.0"
 tokio = { version = "1", features = ["full"] }

@@ -306,7 +306,7 @@ pub fn run(run_config: RunConfig, vars: HashMap<String, String>) -> Result<(), E
             Some(code) => Err(Error::Error(format!("Exit code {}", code))),
             None => Err(Error::Error(format!("Terminated by signal"))),
         },
-        Err(err) => Err(From::from(err)),
+        Err(err) => Err(Error::IOError(err)),
     }
 }
 
