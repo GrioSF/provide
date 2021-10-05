@@ -6,3 +6,5 @@ extern crate base64;
 #[macro_use]
 extern crate lazy_static;
 extern crate regex;
+
+pub use error::Error;

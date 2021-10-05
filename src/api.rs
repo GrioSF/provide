@@ -1,4 +1,4 @@
-use crate::error::ProvideError;
+use crate::error::Error;
 use crate::types::*;
 use aws_sdk_ssm::Config;
 use base64;
@@ -16,7 +16,7 @@ use std::pin::Pin;
 use std::process::{Command, Stdio};
 use std::str;
 
-pub async fn process_parameters(options: ProcessParametersOptions) -> Result<HashMap<String, String>, Box<dyn std::error::Error>> {
+pub async fn process_parameters(options: ProcessParametersOptions) -> Result<HashMap<String, String>, Error> {
     let mut map = HashMap::<String, String>::new();
     match options.mode {
         Some(Mode::GET) => {
@@ -74,7 +74,7 @@ pub async fn process_parameters(options: ProcessParametersOptions) -> Result<Has
 
 fn get_aws_parameters(
     mut options: GetAWSParametersOptions,
-) -> Pin<Box<dyn Future<Output = Result<Vec<Parameter>, Box<dyn std::error::Error>>>>> {
+) -> Pin<Box<dyn Future<Output = Result<Vec<Parameter>, Error>>>> {
     let fut = async move {
         let builder = options.client.get_parameters_by_path()
             .max_results(10) // 10 is max allowed
@@ -107,7 +107,7 @@ fn get_aws_parameters(
 pub fn read_pairs_from_files(
     paths: &Vec<String>,
     use_base64: bool,
-) -> Result<Vec<HashMap<String, String>>, ProvideError> {
+) -> Result<Vec<HashMap<String, String>>, Error> {
     paths
         .iter()
         .map(|path| read_pairs_from_file(path, use_base64))
@@ -117,7 +117,7 @@ pub fn read_pairs_from_files(
 pub fn read_pairs_from_file(
     path: &String,
     use_base64: bool,
-) -> Result<HashMap<String, String>, ProvideError> {
+) -> Result<HashMap<String, String>, Error> {
     let path_buf = fs::canonicalize(path)?;
     let reader = with_file(path_buf)?;
     read_from_reader(reader, use_base64)
@@ -126,12 +126,12 @@ pub fn read_pairs_from_file(
 pub fn read_from_reader(
     reader: impl BufRead,
     use_base64: bool,
-) -> Result<HashMap<String, String>, ProvideError> {
+) -> Result<HashMap<String, String>, Error> {
     let lines_iter = reader.lines().map(|line| match line {
         Ok(text) => parse_line(&text, use_base64),
         Err(err) => Err(From::from(err)),
     });
-    let lines: Result<Vec<Option<Pair>>, ProvideError> = lines_iter.collect();
+    let lines: Result<Vec<Option<Pair>>, Error> = lines_iter.collect();
     match lines {
         Ok(list) => Ok(list
             .into_iter()
@@ -141,12 +141,12 @@ pub fn read_from_reader(
     }
 }
 
-fn parse_line(line: &str, use_base64: bool) -> Result<Option<Pair>, ProvideError> {
+fn parse_line(line: &str, use_base64: bool) -> Result<Option<Pair>, Error> {
     if line.is_empty() {
         return Ok(None);
     }
     let (key, val) = match line.find("=") {
-        Some(0) => Err(ProvideError::BadFormat(String::from(
+        Some(0) => Err(Error::BadFormat(String::from(
             "Invalid key has no length",
         ))),
         Some(index) => {
@@ -158,7 +158,7 @@ fn parse_line(line: &str, use_base64: bool) -> Result<Option<Pair>, ProvideError
             };
             Ok((key, val))
         }
-        None => Err(ProvideError::BadFormat(String::from(format!(
+        None => Err(Error::BadFormat(String::from(format!(
             "Invalid key=value pair {}",
             line
         )))),
@@ -166,13 +166,13 @@ fn parse_line(line: &str, use_base64: bool) -> Result<Option<Pair>, ProvideError
     Ok(Some((key.to_owned(), val.to_owned())))
 }
 
-fn with_file(path: PathBuf) -> Result<impl BufRead, ProvideError> {
+fn with_file(path: PathBuf) -> Result<impl BufRead, Error> {
     let f: fs::File = fs::File::open(path)?;
     let reader = BufReader::new(f);
     Ok(reader)
 }
 
-pub fn params_as_hash_map(params: Vec<Parameter>) -> Result<HashMap<String, String>, ProvideError> {
+pub fn params_as_hash_map(params: Vec<Parameter>) -> Result<HashMap<String, String>, Error> {
     params
         .into_iter()
         .map(|param| {
@@ -184,7 +184,7 @@ pub fn params_as_hash_map(params: Vec<Parameter>) -> Result<HashMap<String, Stri
 }
 
 // /app/staging/key => key
-fn extract_key_from_path(param_path: &str) -> Result<String, ProvideError> {
+fn extract_key_from_path(param_path: &str) -> Result<String, Error> {
     let candidate = param_path.trim_start_matches(MAIN_SEPARATOR);
     let mut segments: Vec<String> = candidate
         .split(MAIN_SEPARATOR)
@@ -192,7 +192,7 @@ fn extract_key_from_path(param_path: &str) -> Result<String, ProvideError> {
         .collect();
     match segments.len() {
         3 => Ok(segments.pop().unwrap()),
-        _ => Err(ProvideError::InvalidPathError(format!(
+        _ => Err(Error::InvalidPathError(format!(
             "Invalid path {}",
             param_path
         ))),
@@ -247,9 +247,9 @@ pub fn escape_for_bash(val: &str) -> String {
 pub fn merge_with_given(
     lines: &Vec<String>,
     use_base64: bool,
-) -> Result<HashMap<String, String>, ProvideError> {
+) -> Result<HashMap<String, String>, Error> {
     let lines_iter = lines.iter().map(|line| parse_line(line, use_base64));
-    let lines: Result<Vec<Option<Pair>>, ProvideError> = lines_iter.collect();
+    let lines: Result<Vec<Option<Pair>>, Error> = lines_iter.collect();
     match lines {
         Ok(list) => Ok(list
             .into_iter()
@@ -259,7 +259,7 @@ pub fn merge_with_given(
     }
 }
 
-pub fn merge_with_env(line: String, use_base64: bool) -> Result<Pair, ProvideError> {
+pub fn merge_with_env(line: String, use_base64: bool) -> Result<Pair, Error> {
     let key = line;
     let env_val = env::var(&key)?;
     let val = if use_base64 {
@@ -273,7 +273,7 @@ pub fn merge_with_env(line: String, use_base64: bool) -> Result<Pair, ProvideErr
 pub fn merge_with_commands(
     paths: &Vec<String>,
     vars: &HashMap<String, String>,
-) -> Result<Vec<HashMap<String, String>>, ProvideError> {
+) -> Result<Vec<HashMap<String, String>>, Error> {
     paths
         .iter()
         .map(|path| merge_with_command(path, vars))
@@ -283,30 +283,30 @@ pub fn merge_with_commands(
 pub fn merge_with_command(
     path: &String,
     vars: &HashMap<String, String>,
-) -> Result<HashMap<String, String>, ProvideError> {
+) -> Result<HashMap<String, String>, Error> {
     let path_buf = fs::canonicalize(path)?;
     let mut command = Command::new(path_buf);
-    &command.envs(vars);
+    command.envs(vars);
     let output = command.output()?;
     match output.status.code() {
         Some(0) => read_from_reader(BufReader::new(Cursor::new(output.stdout)), true),
-        Some(_) => Err(ProvideError::Error(String::from_utf8(output.stderr)?)),
-        None => Err(ProvideError::Error(format!("Terminated by signal"))),
+        Some(_) => Err(Error::Error(String::from_utf8(output.stderr)?)),
+        None => Err(Error::Error(format!("Terminated by signal"))),
     }
 }
 
-pub fn run(run_config: RunConfig, vars: HashMap<String, String>) -> Result<(), ProvideError> {
+pub fn run(run_config: RunConfig, vars: HashMap<String, String>) -> Result<(), Error> {
     let filename = run_config.cmd;
     let mut command = Command::new(&filename);
-    &command.envs(vars);
-    &command.stdout(Stdio::inherit());
-    &command.stderr(Stdio::inherit());
-    &command.args(run_config.args);
+    command.envs(vars);
+    command.stdout(Stdio::inherit());
+    command.stderr(Stdio::inherit());
+    command.args(run_config.args);
     match command.status() {
         Ok(status) => match status.code() {
             Some(0) => Ok(()),
-            Some(code) => Err(ProvideError::Error(format!("Exit code {}", code))),
-            None => Err(ProvideError::Error(format!("Terminated by signal"))),
+            Some(code) => Err(Error::Error(format!("Exit code {}", code))),
+            None => Err(Error::Error(format!("Terminated by signal"))),
         },
         Err(err) => Err(From::from(err)),
     }
@@ -333,12 +333,12 @@ mod tests {
         );
         assert_eq!(extract_key_from_path("/app/env/foo").unwrap(), "foo");
         assert_eq!(
-            extract_key_from_path("/app/foo").unwrap_err(),
-            ProvideError::InvalidPathError(String::from("Invalid path /app/foo"))
+            extract_key_from_path("/app/foo").unwrap_err().to_string(),
+            Error::InvalidPathError(String::from("Invalid path /app/foo")).to_string()
         );
         assert_eq!(
-            extract_key_from_path("/app/foo/bar/car").unwrap_err(),
-            ProvideError::InvalidPathError(String::from("Invalid path /app/foo/bar/car"))
+            extract_key_from_path("/app/foo/bar/car").unwrap_err().to_string(),
+            Error::InvalidPathError(String::from("Invalid path /app/foo/bar/car")).to_string()
         );
     }
 
