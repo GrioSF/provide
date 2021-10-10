@@ -1,21 +1,38 @@
 use clap::{crate_version, App, AppSettings, Arg, ArgGroup, ArgMatches};
 use provide::api;
-use provide::error::ProvideError;
+use provide::Error;
 use provide::types::*;
 use std::collections::HashMap;
 use std::env;
 use tokio;
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let matches = app().get_matches();
-    let options = options_from_matches(matches)?;
-    let format_config = options.format_config.clone();
-    let maybe_run_config = options.run_config.clone();
-    let vars: HashMap<String, String> = api::process_parameters(options).await?;
-    match maybe_run_config {
-        Some(run_config) => Ok(api::run(run_config, vars)?),
-        None => Ok(display(format_config, vars)),
+async fn main() {
+    if let Err(err) = run_app().await {
+        // Handle using Display since main() uses Debug for printing errors
+        println!("{}", err);
+        std::process::exit(1)
+    }
+}
+
+async fn run_app() -> Result<(), Error> {
+    let mut app = app();
+    let matches = app.clone().get_matches();
+    match matches.args.len() {
+        // No args given means one match (region with default), so
+        // we show help instead
+        1 => 
+            Ok(app.print_help()?),
+        _ => {
+            let options = options_from_matches(matches)?;
+            let format_config = options.format_config.clone();
+            let maybe_run_config = options.run_config.clone();
+            let vars: HashMap<String, String> = api::process_parameters(options).await?;
+            match maybe_run_config {
+                Some(run_config) => Ok(api::run(run_config, vars)?),
+                None => Ok(display(format_config, vars)),
+            }
+        }
     }
 }
 
@@ -135,7 +152,7 @@ fn app<'a, 'b>() -> App<'a, 'b> {
             .help("Provide vars to given command"))
 }
 
-fn options_from_matches(matches: ArgMatches) -> Result<ProcessParametersOptions, ProvideError> {
+fn options_from_matches(matches: ArgMatches) -> Result<ProcessParametersOptions, Error> {
     let has_get = matches.is_present("get");
     let has_set = matches.is_present("set");
 
@@ -181,7 +198,7 @@ fn options_from_matches(matches: ArgMatches) -> Result<ProcessParametersOptions,
         Some("export") => Ok(Format::EXPORT),
         Some("json") => Ok(Format::JSON),
         Some("env") | None => Ok(Format::ENV),
-        Some(format_name) => Err(ProvideError::BadFormat(format!(
+        Some(format_name) => Err(Error::BadFormat(format!(
             "Unknown format {}",
             format_name
         ))),
@@ -311,4 +328,5 @@ mod tests {
             }
         );
     }
+
 }
