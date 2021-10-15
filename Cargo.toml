@@ -1,6 +1,6 @@
 [package]
 name = "provide"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Adam Keating <adamkeating@gmail.com>"]
 edition = "2018"
 license = "MIT OR Apache-2.0"
@@ -16,3 +16,6 @@ lazy_static = "1.4.0"
 base64 = "0.13.0"
 tokio = { version = "1", features = ["full"] }
 thiserror = "1.0"
+
+[build-dependencies]
+anyhow = "1.0"
