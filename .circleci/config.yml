@@ -28,11 +28,13 @@ jobs:
           name: "Compress and persist binary"
           command: |
             mkdir -p /tmp/work
-            VERSION=$(./extract_version.sh)
+            cp provide /tmp/work
+            VERSION=$(./provide --version | awk '{print $2}')
             tar -czf "/tmp/work/provide-$VERSION-x86_64-unknown-linux-musl.tar.gz" provide
       - persist_to_workspace:
           root: /tmp/work
           paths:
+            - provide
             - '*.tar.gz'
 
   build-mac:
@@ -57,7 +59,7 @@ jobs:
           name: "Compress and persist binary"
           command: |
             mkdir -p /tmp/work
-            VERSION=$(./extract_version.sh)
+            VERSION=$(./provide --version | awk '{print $2}')
             tar -czf "/tmp/work/provide-$VERSION-x86_64-apple-darwin.tar.gz" provide
       - persist_to_workspace:
           root: /tmp/work
@@ -74,7 +76,8 @@ jobs:
       - run:
           name: "Publish Release on GitHub"
           command: |
-            VERSION=$(./extract_version.sh)
+            VERSION=$(/tmp/work/provide --version | awk '{print $2}')
+            rm /tmp/work/provide
             go get github.com/tcnksm/ghr
             ghr -t $GITHUB_TOKEN \
               -u $CIRCLE_PROJECT_USERNAME \

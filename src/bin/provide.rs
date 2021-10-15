@@ -1,4 +1,4 @@
-use clap::{crate_version, App, AppSettings, Arg, ArgGroup, ArgMatches};
+use clap::{App, AppSettings, Arg, ArgGroup, ArgMatches};
 use provide::api;
 use provide::Error;
 use provide::types::*;
@@ -37,8 +37,15 @@ async fn run_app() -> Result<(), Error> {
 }
 
 fn app<'a, 'b>() -> App<'a, 'b> {
+    // Is there a better way to do this?
+    let version = concat!(
+        env!("CARGO_PKG_VERSION"), 
+        " (", 
+        env!("GIT_SHORT_HASH"), 
+        ")"
+    );
     App::new("provide")
-        .version(crate_version!())
+        .version(version)
         .settings(&[AppSettings::TrailingVarArg])
         .about("Provides environment variables from AWS Parameter Store")
 
