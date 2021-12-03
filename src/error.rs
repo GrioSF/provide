@@ -36,4 +36,3 @@ pub enum Error {
 fn test_error_display() {
     assert_eq!("BadFormat: reasons", format!("{}", Error::BadFormat("reasons".into())))
 }
-

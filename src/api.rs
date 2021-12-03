@@ -1,6 +1,5 @@
 use crate::error::Error;
 use crate::types::*;
-use aws_sdk_ssm::Config;
 use base64;
 use regex::Regex;
 use aws_sdk_ssm::model::Parameter;
@@ -20,9 +19,8 @@ pub async fn process_parameters(options: ProcessParametersOptions) -> Result<Has
     let mut map = HashMap::<String, String>::new();
     match options.mode {
         Some(Mode::GET) => {
-            let credentials_provider = aws_auth_providers::default_provider();
-            let config = Config::builder().credentials_provider(credentials_provider).build();
-            let client = Client::from_conf(config);
+            let shared_config = aws_config::load_from_env().await;
+            let client = Client::new(&shared_config);
             let options = GetAWSParametersOptions {
                 path: options.path.unwrap(),
                 next_token: None,
@@ -308,7 +306,7 @@ pub fn run(run_config: RunConfig, vars: HashMap<String, String>) -> Result<(), E
             Some(code) => Err(Error::Error(format!("Exit code {}", code))),
             None => Err(Error::Error(format!("Terminated by signal"))),
         },
-        Err(err) => Err(From::from(err)),
+        Err(err) => Err(Error::IOError(err)),
     }
 }
 
