@@ -6,8 +6,8 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-aws-config = "0.3.0"
-aws-sdk-ssm = "0.3.0"
+aws-config = "0.4.0"
+aws-sdk-ssm = "0.4.0"
 regex = "1.5.4"
 clap = "2.33.3"
 dirs = "4.0.0"
@@ -15,6 +15,7 @@ lazy_static = "1.4.0"
 base64 = "0.13.0"
 tokio = { version = "1", features = ["full"] }
 thiserror = "1.0"
+tokio-stream = "0.1"
 
 [build-dependencies]
 anyhow = "1.0"
