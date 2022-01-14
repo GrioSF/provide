@@ -1,6 +1,5 @@
 use crate::error::Error;
 use crate::types::*;
-use aws_sdk_ssm::model::Parameter;
 use aws_sdk_ssm::Client;
 use base64;
 use regex::Regex;
@@ -65,7 +64,7 @@ pub async fn process_parameters(
 async fn read_from_aws(path: String) -> Result<HashMap<String, String>, Error> {
   let shared_config = aws_config::load_from_env().await;
   let client = Client::new(&shared_config);
-  let mut acc = Vec::<Parameter>::new();
+  let mut map = HashMap::<String, String>::new();
   let mut stream = client
     .get_parameters_by_path()
     .path(path)
@@ -75,14 +74,16 @@ async fn read_from_aws(path: String) -> Result<HashMap<String, String>, Error> {
     .send();
 
   while let Some(o) = stream.next().await {
-    match o?.parameters {
-      Some(mut output) => {
-        acc.append(&mut output);
+    if let Some(parameters) = o?.parameters {
+      for p in parameters {
+        if let (Some(name), Some(val)) = (p.name(), p.value()) {
+          let key = extract_key_from_path(&name)?;
+          map.insert(key, val.to_string());
+        }
       }
-      None => (),
     }
   }
-  parameters_as_hash_map(acc)
+  Ok(map)
 }
 
 pub fn read_pairs_from_files(
@@ -108,15 +109,9 @@ pub fn read_from_reader(
   reader: impl BufRead,
   use_base64: bool,
 ) -> Result<HashMap<String, String>, Error> {
-  let lines_iter = reader.lines().map(|line| match line {
-    Ok(text) => parse_line(&text, use_base64),
-    Err(err) => Err(From::from(err)),
-  });
-  let lines: Result<Vec<Option<Pair>>, Error> = lines_iter.collect();
-  match lines {
-    Ok(list) => Ok(list.into_iter().filter_map(|p| p).collect()),
-    Err(err) => Err(err),
-  }
+  let lines_iter = reader.lines().map(|line| parse_line(&line?, use_base64));
+  let lines: Vec<Option<Pair>> = lines_iter.collect::<Result<Vec<Option<Pair>>, Error>>()?;
+  Ok(lines.into_iter().filter_map(|p| p).collect())
 }
 
 fn parse_line(line: &str, use_base64: bool) -> Result<Option<Pair>, Error> {
@@ -139,26 +134,13 @@ fn parse_line(line: &str, use_base64: bool) -> Result<Option<Pair>, Error> {
       line
     )))),
   }?;
-  Ok(Some((key.to_owned(), val.to_owned())))
+  Ok(Some(Pair(key.to_owned(), val.to_owned())))
 }
 
 fn with_file(path: PathBuf) -> Result<impl BufRead, Error> {
   let f: fs::File = fs::File::open(path)?;
   let reader = BufReader::new(f);
   Ok(reader)
-}
-
-pub fn parameters_as_hash_map(
-  parameters: Vec<Parameter>,
-) -> Result<HashMap<String, String>, Error> {
-  parameters
-    .into_iter()
-    .map(|param| {
-      let key = extract_key_from_path(&param.name.unwrap())?;
-      let val = param.value.unwrap();
-      Ok((key.to_owned(), val.to_owned()))
-    })
-    .collect()
 }
 
 // /app/staging/key => key
@@ -171,8 +153,7 @@ fn extract_key_from_path(param_path: &str) -> Result<String, Error> {
   match segments.len() {
     3 => Ok(segments.pop().unwrap()),
     _ => Err(Error::InvalidPathError(format!(
-      "Invalid path {}",
-      param_path
+      "Invalid path {param_path}"
     ))),
   }
 }
@@ -190,7 +171,7 @@ pub fn as_env_format(map: HashMap<String, String>, raw: bool) -> String {
     .map(|(k, v)| {
       let key = k.to_uppercase();
       let val = if raw { v } else { base64::encode(&v) };
-      format!("{}={}\n", key, val)
+      format!("{key}={val}\n")
     })
     .collect();
   lines.join("")
@@ -203,10 +184,10 @@ pub fn as_export_format(map: HashMap<String, String>, raw: bool) -> String {
       let key = k.to_uppercase();
       if raw {
         let val = base64::encode(&v);
-        format!("export {}={}\n", key, val)
+        format!("export {key}={val}\n")
       } else {
         let val = base64::encode(&v);
-        format!("export {}=$(base64 --decode <<< \"{}\")\n", key, val)
+        format!("export {key}=$(base64 --decode <<< \"{val}\")\n")
       }
     })
     .collect();
@@ -226,12 +207,14 @@ pub fn merge_with_given(
   lines: &Vec<String>,
   use_base64: bool,
 ) -> Result<HashMap<String, String>, Error> {
-  let lines_iter = lines.iter().map(|line| parse_line(line, use_base64));
-  let lines: Result<Vec<Option<Pair>>, Error> = lines_iter.collect();
-  match lines {
-    Ok(list) => Ok(list.into_iter().filter_map(|p| p).collect()),
-    Err(err) => Err(err),
-  }
+  let map = lines
+    .iter()
+    .map(|line| parse_line(line, use_base64))
+    .collect::<Result<Vec<Option<Pair>>, Error>>()?
+    .into_iter()
+    .filter_map(|p| p)
+    .collect();
+  Ok(map)
 }
 
 pub fn merge_with_env(line: String, use_base64: bool) -> Result<Pair, Error> {
@@ -242,7 +225,7 @@ pub fn merge_with_env(line: String, use_base64: bool) -> Result<Pair, Error> {
   } else {
     env_val
   };
-  Ok((key, val))
+  Ok(Pair(key, val))
 }
 
 pub fn merge_with_commands(
@@ -280,7 +263,7 @@ pub fn run(run_config: RunConfig, vars: HashMap<String, String>) -> Result<(), E
   match command.status() {
     Ok(status) => match status.code() {
       Some(0) => Ok(()),
-      Some(code) => Err(Error::Error(format!("Exit code {}", code))),
+      Some(code) => Err(Error::Error(format!("Exit code {code}"))),
       None => Err(Error::Error(format!("Terminated by signal"))),
     },
     Err(err) => Err(Error::IOError(err)),
@@ -291,13 +274,17 @@ pub fn run(run_config: RunConfig, vars: HashMap<String, String>) -> Result<(), E
 mod tests {
   use super::*;
 
-  fn encode_pair((key, val): Pair, use_base64: bool) -> String {
-    let encoded_val = if use_base64 {
-      base64::encode(&val)
-    } else {
-      val
-    };
-    format!("{}={}", key, encoded_val)
+  fn encode_pair(pair: Pair, use_base64: bool) -> String {
+    match pair {
+      Pair(key, val) => {
+        let encoded_val = if use_base64 {
+          base64::encode(&val)
+        } else {
+          val
+        };
+        format!("{key}={encoded_val}")
+      }
+    }
   }
 
   #[test]
@@ -341,9 +328,9 @@ mod tests {
 
   #[test]
   fn test_read_from_reader() {
-    let pair1 = encode_pair(("foo".to_owned(), "bar".to_owned()), false);
-    let pair2 = encode_pair(("baz".to_owned(), "qux".to_owned()), false);
-    let source = format!("{}\n{}\n", pair1, pair2).into_bytes();
+    let pair1 = encode_pair(Pair("foo".to_owned(), "bar".to_owned()), false);
+    let pair2 = encode_pair(Pair("baz".to_owned(), "qux".to_owned()), false);
+    let source = format!("{pair1}\n{pair2}\n").into_bytes();
     let result = read_from_reader(BufReader::new(Cursor::new(source)), false).unwrap();
     let expected: HashMap<String, String> = vec![
       ("foo".to_owned(), "bar".to_owned()),
@@ -356,9 +343,9 @@ mod tests {
 
   #[test]
   fn test_read_from_reader_as_base64() {
-    let pair1 = encode_pair(("foo".to_owned(), "bar".to_owned()), true);
-    let pair2 = encode_pair(("baz".to_owned(), "qux".to_owned()), true);
-    let source = format!("{}\n{}\n", pair1, pair2).into_bytes();
+    let pair1 = encode_pair(Pair("foo".to_owned(), "bar".to_owned()), true);
+    let pair2 = encode_pair(Pair("baz".to_owned(), "qux".to_owned()), true);
+    let source = format!("{pair1}\n{pair2}\n").into_bytes();
     let result = read_from_reader(BufReader::new(Cursor::new(source)), true).unwrap();
     let expected: HashMap<String, String> = vec![
       ("foo".to_owned(), "bar".to_owned()),
@@ -371,9 +358,9 @@ mod tests {
 
   #[test]
   fn test_read_from_reader_with_extra_lines() {
-    let pair1 = encode_pair(("foo".to_owned(), "bar".to_owned()), true);
-    let pair2 = encode_pair(("baz".to_owned(), "qux".to_owned()), true);
-    let source = format!("{}\n\r\n\n{}\n\n", pair1, pair2).into_bytes();
+    let pair1 = encode_pair(Pair("foo".to_owned(), "bar".to_owned()), true);
+    let pair2 = encode_pair(Pair("baz".to_owned(), "qux".to_owned()), true);
+    let source = format!("{pair1}\n\r\n\n{pair2}\n\n").into_bytes();
     let result = read_from_reader(BufReader::new(Cursor::new(source)), true).unwrap();
     let expected: HashMap<String, String> = vec![
       ("foo".to_owned(), "bar".to_owned()),
