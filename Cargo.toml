@@ -6,8 +6,8 @@ edition = "2018"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
-aws-config = "0.4.0"
-aws-sdk-ssm = "0.4.0"
+aws-config = "0.5.2"
+aws-sdk-ssm = "0.5.2"
 regex = "1.5.4"
 clap = "2.33.3"
 dirs = "4.0.0"
