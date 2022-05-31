@@ -169,8 +169,7 @@ fn extract_key_from_path(param_path: &str) -> Result<String, Error> {
 pub fn as_env_format(map: HashMap<String, String>, raw: bool) -> String {
   let lines: Vec<String> = map
     .into_iter()
-    .map(|(k, v)| {
-      let key = k.to_uppercase();
+    .map(|(key, v)| {
       let val = if raw { v } else { base64::encode(&v) };
       format!("{key}={val}\n")
     })
@@ -181,8 +180,7 @@ pub fn as_env_format(map: HashMap<String, String>, raw: bool) -> String {
 pub fn as_export_format(map: HashMap<String, String>, raw: bool) -> String {
   let lines: Vec<String> = map
     .into_iter()
-    .map(|(k, v)| {
-      let key = k.to_uppercase();
+    .map(|(key, v)| {
       if raw {
         let val = base64::encode(&v);
         format!("export {key}={val}\n")
