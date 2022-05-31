@@ -43,8 +43,8 @@ fn test_as_env_format() {
   .collect();
   let env_format = as_env_format(map, true);
   let mut result: Vec<&str> = env_format.trim().split("\n").collect();
-  result.sort();
-  assert_eq!(result, vec!["ONE=bar", "THREE=clock", "TWO=baz"]);
+  result.sort_by_key(|line| line.to_lowercase());
+  assert_eq!(result, vec!["one=bar", "THREE=clock", "two=baz"]);
 }
 
 #[test]
