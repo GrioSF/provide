@@ -96,3 +96,19 @@ fn test_read_from_reader_with_extra_lines() {
   .collect();
   assert_eq!(result, expected);
 }
+
+#[test]
+fn test_parse_line_as_capture() {
+  env::set_var("FOO", "bar");
+  let line = "FOO";
+  let pair = parse_line(line, false).unwrap().unwrap();
+  assert_eq!(pair, Pair("FOO".to_string(), "bar".to_string()));
+}
+
+#[test]
+fn test_parse_line() {
+  env::set_var("FOO", "bar");
+  let line = "FOO=notbar";
+  let pair = parse_line(line, false).unwrap().unwrap();
+  assert_eq!(pair, Pair("FOO".to_string(), "notbar".to_string()));
+}

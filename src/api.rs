@@ -125,7 +125,7 @@ fn parse_line(line: &str, use_base64: bool) -> Result<Option<Pair>, Error> {
   let (key, val) = match line.find("=") {
     Some(0) => Err(Error::BadFormat(String::from("Invalid key has no length"))),
     Some(index) => {
-      let key = &line[0..index];
+      let key = line[0..index].to_owned();
       let encoded_val = &line[index + 1..];
       let val = match use_base64 {
         true => String::from_utf8(base64::decode(encoded_val)?)?,
@@ -133,12 +133,9 @@ fn parse_line(line: &str, use_base64: bool) -> Result<Option<Pair>, Error> {
       };
       Ok((key, val))
     }
-    None => Err(Error::BadFormat(String::from(format!(
-      "Invalid key=value pair {}",
-      line
-    )))),
+    None => merge_with_env(line, use_base64),
   }?;
-  Ok(Some(Pair(key.to_owned(), val.to_owned())))
+  Ok(Some(Pair(key, val)))
 }
 
 fn with_file(path: PathBuf) -> Result<impl BufRead, Error> {
@@ -221,15 +218,15 @@ pub fn merge_with_given(
   Ok(map)
 }
 
-pub fn merge_with_env(line: String, use_base64: bool) -> Result<Pair, Error> {
-  let key = line;
-  let env_val = env::var(&key)?;
+pub fn merge_with_env(line: &str, use_base64: bool) -> Result<(String, String), Error> {
+  let key = line.to_string();
+  let maybe_encoded_val = env::var(&key)?;
   let val = if use_base64 {
-    String::from_utf8(base64::decode(&env_val)?)?
+    String::from_utf8(base64::decode(&maybe_encoded_val)?)?
   } else {
-    env_val
+    maybe_encoded_val
   };
-  Ok(Pair(key, val))
+  Ok((key, val))
 }
 
 pub fn merge_with_commands(
