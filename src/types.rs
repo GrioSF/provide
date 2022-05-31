@@ -27,7 +27,7 @@ pub struct GetAWSParametersOptions {
   pub acc: Vec<Parameter>,
   pub client: Client,
 }
-
+#[derive(Debug, PartialEq)]
 pub struct Pair(pub String, pub String);
 
 impl From<(String, String)> for Pair {
